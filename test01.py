@@ -7,15 +7,14 @@ st.set_page_config(page_title="성의 연락처", layout="wide")
 
 st.markdown("""
     <style>
-    /* 상단 여백 및 헤더 제거 */
     .block-container { padding: 0.4rem 0.6rem !important; }
     header, footer { visibility: hidden; }
     
-    /* 탭 디자인: 글자 크기 및 간격 축소 */
+    /* 탭 디자인: 글자 크기 축소 및 간격 최적화 */
     .stTabs [data-baseweb="tab-list"] { gap: 2px; }
     .stTabs [data-baseweb="tab"] { height: 32px; font-size: 0.8rem; padding: 0 6px; font-weight: 600; }
 
-    /* 리스트: 한 화면 노출 극대화 (최소 높이 42px) */
+    /* 리스트: 한 화면 노출 극대화 (최소 높이 40px 수준) */
     .list-row {
         display: flex;
         align-items: center;
@@ -48,52 +47,54 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 및 열 이름 강제 정규화 (KeyError 해결 핵심)
+# 2. 데이터 로드: 구조를 몰라도 읽어오는 방어적 로직
 @st.cache_data
 def load_data():
     try:
         # 파일 읽기
         df = pd.read_csv('성의교정 연락처.xlsx - Sheet1.csv')
+        df = df.fillna('')
         
-        # [핵심] 컬럼명이 깨졌을 경우를 대비해 위치(index) 기반으로 강제 이름 부여
-        # 열이 6개라고 가정하고 강제로 덮어씌웁니다.
-        new_cols = ['구분', '부서명', '담당자', '전화', '휴대폰', '비고/업무']
-        df.columns = new_cols[:len(df.columns)]
-        
-        # 각 셀의 앞뒤 공백 제거
-        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-        return df.fillna('')
+        # [해결책] 기존 컬럼명이 무엇이든 상관없이 우리가 쓸 이름으로 강제 교체
+        # 만약 열 개수가 부족하면 부족한 대로, 남으면 남는 대로 처리
+        cols = ['구분', '부서명', '담당자', '전화', '휴대폰', '비고']
+        new_columns = {df.columns[i]: cols[i] for i in range(min(len(df.columns), len(cols)))}
+        df.rename(columns=new_columns, inplace=True)
+        return df
     except:
-        return pd.DataFrame(columns=['구분', '부서명', '담당자', '전화', '휴대폰', '비고/업무'])
+        return pd.DataFrame()
 
 df = load_data()
 
-# 3. 검색 (공간 절약)
+# 3. 검색 (데이터가 있을 때만 실행)
 search = st.text_input("", placeholder="성함, 부서, 업무 검색", label_visibility="collapsed")
-if search:
+if search and not df.empty:
     df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
 
-# 4. 요청하신 탭 순서 (보안 -> 시설 -> 미화 -> 총무 -> 지원 -> 기타 -> 전체)
-tab_list = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
-tabs = st.tabs(tab_list)
+# 4. 요청하신 탭 순서 적용
+tab_titles = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
+tabs = st.tabs(tab_titles)
 
 def render_row(target_df):
     if target_df.empty:
-        st.caption("내용 없음")
+        st.caption("결과가 없습니다.")
         return
     
     for _, row in target_df.iterrows():
-        name = str(row['담당자']).strip()
-        dept = str(row['부서명']).strip()
-        tel_raw = str(row['전화']).strip()
-        hp_raw = str(row['휴대폰']).strip()
-        work = str(row['비고/업무']).strip()
+        # 데이터 추출 (KeyError 방지를 위해 위치 기반 및 dict get 혼용)
+        d = row.to_dict()
+        # 컬럼명이 바뀌었을 수 있으므로 안전하게 추출
+        name = str(d.get('담당자', '')).strip()
+        dept = str(d.get('부서명', '')).strip()
+        tel_raw = str(d.get('전화', '')).strip()
+        hp_raw = str(d.get('휴대폰', '')).strip()
+        work = str(d.get('비고', '')).strip()
         
-        # 전화 연결 번호 정제 (* 및 숫자 유지)
+        # 전화연결 번호 정리 (숫자와 내선용 *만 남김)
         tel_link = re.sub(r'[^0-9*]', '', tel_raw)
         hp_link = re.sub(r'[^0-9]', '', hp_raw)
         
-        # 가변 헤드라인
+        # 헤드라인 결정
         title = name if name else dept
         sub = dept if name else ""
         
@@ -113,13 +114,16 @@ def render_row(target_df):
         </div>
         ''', unsafe_allow_html=True)
 
-# 5. 탭별 매핑 실행
+# 5. 탭별 필터링 실행
 for i, tab in enumerate(tabs):
     with tab:
-        cat = tab_list[i]
-        if cat == "전체":
+        cat_name = tab_titles[i]
+        if df.empty:
+            st.error("데이터를 불러오지 못했습니다. 파일명을 확인해주세요.")
+        elif cat_name == "전체":
             render_row(df)
         else:
-            # '구분' 열의 위치를 기반으로 필터링 (iloc[0]이 '구분' 열임을 보장)
-            filtered_df = df[df.iloc[:, 0].str.contains(cat, na=False)]
-            render_row(filtered_df)
+            # [가장 강력한 필터링] 어느 열에서든 해당 단어가 포함되어 있으면 표시
+            # 특정 열('구분')이 깨져서 못 찾는 상황을 원천 방지함
+            mask = df.apply(lambda x: x.astype(str).str.contains(cat_name, na=False)).any(axis=1)
+            render_row(df[mask])
