@@ -2,48 +2,52 @@ import streamlit as st
 import pandas as pd
 import re
 
-# 1. 페이지 설정 및 여백 극한 최적화
+# 1. 페이지 설정 및 여백 극한 최적화 (한 화면 최대 노출)
 st.set_page_config(page_title="성의 연락처", layout="wide")
 
 st.markdown("""
     <style>
-    /* 상단 및 좌우 여백 제거 */
-    .block-container { padding: 0.5rem 0.7rem !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 5px; }
-    .stTabs [data-baseweb="tab"] { height: 35px; font-size: 0.85rem; padding: 0 10px; }
+    /* 상단 여백 및 기본 패딩 제거 */
+    .block-container { padding: 0.5rem 0.5rem !important; }
+    header {visibility: hidden;}
     
-    /* 한 줄 리스트 디자인 (뱅킹 앱 스타일) */
+    /* 탭 디자인 슬림화 */
+    .stTabs [data-baseweb="tab-list"] { gap: 2px; }
+    .stTabs [data-baseweb="tab"] { height: 32px; font-size: 0.8rem; padding: 0 8px; }
+
+    /* 리스트 디자인: 높이를 최소화하여 한 화면 노출 극대화 */
     .list-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 0;
-        border-bottom: 1px solid #f1f1f1;
+        padding: 6px 0;
+        border-bottom: 1px solid #f2f2f2;
+        min-height: 45px;
     }
-    .info-section { flex: 1; min-width: 0; }
-    .title-line { display: flex; align-items: baseline; gap: 6px; }
-    .main-text { font-size: 1rem; font-weight: 700; color: #111; white-space: nowrap; }
-    .sub-text { font-size: 0.8rem; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .work-desc { font-size: 0.75rem; color: #999; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .info-section { flex: 1; min-width: 0; line-height: 1.2; }
+    .title-line { display: flex; align-items: center; gap: 5px; }
+    .main-text { font-size: 0.95rem; font-weight: 700; color: #000; }
+    .sub-text { font-size: 0.75rem; color: #888; }
+    .work-desc { font-size: 0.7rem; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
     
-    /* 전화 버튼 그룹 */
-    .btn-group { display: flex; gap: 4px; margin-left: 10px; }
+    /* 원터치 버튼 슬림화 */
+    .btn-group { display: flex; gap: 3px; }
     .call-btn {
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 44px;
-        height: 36px;
-        border-radius: 6px;
+        width: 38px;
+        height: 34px;
+        border-radius: 4px;
         text-decoration: none !important;
-        font-size: 1.1rem;
+        font-size: 1rem;
     }
-    .btn-tel { background-color: #e7f1ff; color: #007bff !important; } /* 내선: 연파랑 */
-    .btn-hp { background-color: #e9f7ef; color: #28a745 !important; }  /* 직통: 연초록 */
+    .btn-tel { background-color: #f0f7ff; color: #007bff !important; border: 1px solid #ddecff; }
+    .btn-hp { background-color: #f0fff4; color: #28a745 !important; border: 1px solid #dfffe8; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 처리 함수 (숫자만 추출 로직 포함)
+# 2. 데이터 처리 및 KeyError 방지 로직
 def clean_phone(phone_str):
     if not phone_str: return ""
     return re.sub(r'[^0-9]', '', str(phone_str))
@@ -51,32 +55,49 @@ def clean_phone(phone_str):
 @st.cache_data
 def load_data():
     try:
+        # 파일 읽기 및 컬럼명 양끝 공백 제거 (KeyError 방지 핵심)
         df = pd.read_csv('성의교정 연락처.xlsx - Sheet1.csv')
+        df.columns = df.columns.str.strip() 
+        
+        # 만약 '구분' 컬럼이 없다면 첫 번째 컬럼을 '구분'으로 강제 지정
+        if '구분' not in df.columns:
+            df.rename(columns={df.columns[0]: '구분'}, inplace=True)
+            
         return df.fillna('')
-    except:
-        return pd.DataFrame(columns=["구분", "부서명", "담당자", "전화", "휴대폰", "비고/업무"])
+    except Exception as e:
+        st.error(f"데이터 로드 실패: {e}")
+        return pd.DataFrame()
 
 df = load_data()
 
-# 3. 검색 UI (레이블 없이 입력창만)
-search = st.text_input("", placeholder="🔍 이름, 부서, 번호 검색 (167개 전체)")
+# 3. 검색 UI (검색창 높이 줄임)
+search = st.text_input("", placeholder="🔍 성함/부서/번호 검색", label_visibility="collapsed")
 
-if search:
+if search and not df.empty:
     df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
 
-# 4. 카테고리 탭 (총무, 지원, 시설, 보안/미화, 기타)
-tab_list = ["전체", "총무", "지원", "시설", "보안/미화", "기타"]
+# 4. 탭 구성 (KeyError 방지를 위해 실제 데이터에 있는 값만 사용)
+available_cats = ["전체"] + (df['구분'].unique().tolist() if not df.empty else [])
+# 중복 제거 및 순서 정리 (원하시는 순서대로)
+tab_list = ["전체", "총무", "지원", "시설", "보안", "미화", "기타"]
+# 실제 데이터에 있는 카테고리만 필터링
+tab_list = [c for c in tab_list if c in available_cats or c == "전체"]
+
 tabs = st.tabs(tab_list)
 
 def render_row(target_df):
     for _, row in target_df.iterrows():
-        name = str(row['담당자']).strip()
-        dept = str(row['부서명']).strip()
-        tel = clean_phone(row['전화'])
-        hp = clean_phone(row['휴대폰'])
-        work = str(row['비고/업무']).strip()
+        # 컬럼 존재 여부 확인하며 데이터 추출
+        name = str(row.get('담당자', '')).strip()
+        dept = str(row.get('부서명', '')).strip()
+        tel_raw = str(row.get('전화', ''))
+        hp_raw = str(row.get('휴대폰', ''))
+        work = str(row.get('비고/업무', '')).strip()
         
-        # 가변형 헤드라인 로직: 이름 유무에 따른 타이틀 결정
+        tel = clean_phone(tel_raw)
+        hp = clean_phone(hp_raw)
+        
+        # 가변형 헤드라인
         display_title = name if name else dept
         display_sub = dept if name else ""
         
@@ -90,20 +111,18 @@ def render_row(target_df):
                 {"<div class='work-desc'>" + work + "</div>" if work else ""}
             </div>
             <div class="btn-group">
-                {"<a href='tel:" + tel + "' class='call-btn btn-tel' title='내선'>📞</a>" if tel else ""}
-                {"<a href='tel:" + hp + "' class='call-btn btn-hp' title='직통'>📱</a>" if hp else ""}
+                {"<a href='tel:" + tel + "' class='call-btn btn-tel'>📞</a>" if tel else ""}
+                {"<a href='tel:" + hp + "' class='call-btn btn-hp'>📱</a>" if hp else ""}
             </div>
         </div>
         '''
         st.markdown(row_html, unsafe_allow_html=True)
 
-# 5. 탭별 출력 로직
+# 5. 실행
 for i, tab in enumerate(tabs):
     with tab:
         cat = tab_list[i]
         if cat == "전체":
             render_row(df)
-        elif cat == "보안/미화":
-            render_row(df[df['구분'].isin(['보안', '미화'])])
         else:
             render_row(df[df['구분'] == cat])
