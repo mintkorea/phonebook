@@ -1,70 +1,67 @@
 import streamlit as st
 import pandas as pd
 
-# 1. 데이터 로드 (에러 방지를 위해 열 이름을 강제로 지정)
+# 1. 데이터 로드 및 강제 정렬
 @st.cache_data
 def load_data():
     file_path = 'contacts.csv'
-    # CSV 파일의 헤더 순서와 일치해야 합니다.
+    # 정확한 데이터 추출을 위한 표준 컬럼 정의
     column_names = ['카테고리', '부서_업체명', '성명', '직함', '내선_일반', '휴대폰', '담당업무_비고']
     
     try:
-        # header=0은 파일의 첫 줄을 무시하고 names에 지정된 이름을 사용한다는 뜻입니다.
+        # 데이터가 밀리지 않도록 설정
         df = pd.read_csv(file_path, names=column_names, header=0).fillna('')
+        # 모든 공백 제거하여 매칭 정확도 향상
+        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
         return df
-    except FileNotFoundError:
-        st.error(f"⚠️ '{file_path}' 파일을 찾을 수 없습니다.")
-        return None
     except Exception as e:
-        st.error(f"⚠️ 데이터 로딩 중 오류 발생: {e}")
+        st.error(f"⚠️ 파일 로딩 실패: {e}")
         return None
 
 df = load_data()
 
-# 2. UI 구성
-st.set_page_config(page_title="성의교정 연락처", page_icon="🏢")
+# 2. UI 설정
+st.set_page_config(page_title="성의교정 연락처", layout="wide")
 st.title("🏢 성의교정 통합 연락처 검색")
 
 if df is not None:
-    # 검색창
-    search_term = st.text_input("부서, 성명 또는 키워드(예: 누수, 정수기)를 입력하세요", "")
+    # 검색창 강조
+    search_term = st.text_input("🔍 찾으시는 부서, 성함 또는 업무 키워드를 입력하세요 (예: 누수, 전기, 총무)", "")
 
-    # 3. 검색 로직 (전체 텍스트 검색)
     if search_term:
+        # 전체 행에서 검색어 포함 여부 확인
         mask = df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)
         result_df = df[mask]
         
-        # 4. 결과 출력 (카드형 레이아웃)
         if not result_df.empty:
-            st.success(f"총 {len(result_df)}건의 검색 결과가 있습니다.")
+            st.success(f"✅ 총 {len(result_df)}건의 연락처를 찾았습니다.")
             
-            # 각 행을 카드로 시각화
-            for i, row in result_df.iterrows():
-                # iloc를 사용하여 열 이름 오류 방지 (1:부서, 2:성명, 3:직함)
-                department = row.iloc[1] 
-                name = row.iloc[2]
-                position = row.iloc[3]
+            # 카드형 레이아웃 출력
+            for _, row in result_df.iterrows():
+                # 부서 이름과 성명을 제목으로 강조
+                dept = row['부서_업체명']
+                name_info = f"{row['성명']} {row['직함']}".strip()
                 
-                # 카드 제목 구성 (부서명 - 성명 직함)
-                card_title = f"📌 {department} - {name} {position}" if name else f"📌 {department}"
-                
-                with st.expander(card_title, expanded=True): # expanded=True로 기본으로 펼쳐둠
-                    # 내부 콘텐츠 구성 (4:내선, 5:휴대폰, 6:업무)
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.write(f"**📞 내선/일반:** {row.iloc[4]}")
-                    with c2:
-                        st.write(f"**📱 휴대폰:** {row.iloc[5]}")
+                with st.container():
+                    # 부서명을 상단에 크게 표시
+                    st.markdown(f"### 📍 {dept}") 
                     
-                    # 담당업무 및 비고 (가장 중요한 키워드)
-                    st.info(f"**📝 담당업무 및 비고:** {row.iloc[6]}")
+                    col1, col2, col3 = st.columns([1, 1, 2])
+                    with col1:
+                        st.write(f"👤 **담당자**: {name_info if name_info else '부서 공용'}")
+                    with col2:
+                        # 전화번호 하이퍼링크 처리 (모바일 클릭 시 바로 전화 연결)
+                        tel = row['내선_일반']
+                        st.write(f"📞 **내선**: [{tel}](tel:{tel})")
+                    with col3:
+                        mobile = row['휴대폰']
+                        st.write(f"📱 **휴대폰**: [{mobile}](tel:{mobile})")
                     
+                    # 업무 상세 내용 강조
+                    st.info(f"📝 **담당 업무**: {row['담당업무_비고']}")
+                    st.divider() # 카드 구분선
         else:
-            st.warning("검색 결과가 없습니다. 키워드를 확인해 주세요.")
+            st.warning("🧐 검색 결과가 없습니다. 다른 키워드로 검색해 보세요.")
     else:
-        st.info("검색어를 입력하시면 상세 연락처를 확인하실 수 있습니다.")
-        # 초기 화면에는 전체 데이터프레임을 보여줌
+        st.info("💡 키워드를 입력하면 상세 카드가 나타납니다. 아래는 전체 목록입니다.")
         st.dataframe(df, use_container_width=True)
-
-else:
-    st.warning("데이터를 불러올 수 없습니다. CSV 파일을 확인해 주세요.")
