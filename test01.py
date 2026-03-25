@@ -3,124 +3,137 @@ import pandas as pd
 import re
 import os
 
-# 1. 페이지 설정 (최대한 넓고 깔끔하게)
+# 1. 페이지 설정: 모바일 화면에 꽉 차게 설정
 st.set_page_config(page_title="성의 연락처", layout="wide")
 
 st.markdown("""
     <style>
-    .block-container { padding: 0.5rem 0.7rem !important; background-color: #fff; }
+    .block-container { padding: 0.5rem 0.7rem !important; background-color: #ffffff; }
     header, footer { visibility: hidden; }
     
-    /* 검색창: 직관적으로 강조 */
+    /* 검색창: 테두리를 두껍게 하여 시인성 확보 */
     .stTextInput input {
-        border: 2px solid #222 !important;
+        border: 2px solid #111 !important;
         border-radius: 4px !important;
         height: 45px !important;
-        font-weight: 600 !important;
     }
 
-    /* 리스트 스타일: 업무 내용 강조 */
-    .item-container {
+    /* 탭 디자인: 촘촘하게 배치 */
+    .stTabs [data-baseweb="tab-list"] { gap: 4px; }
+    .stTabs [data-baseweb="tab"] { height: 36px; font-size: 0.82rem; font-weight: 700; color: #555; }
+    .stTabs [aria-selected="true"] { color: #000 !important; border-bottom: 2px solid #000 !important; }
+
+    /* 리스트 디자인: 무엇을 하는 사람인지(업무)를 가장 강조 */
+    .contact-row {
         padding: 12px 0;
         border-bottom: 1px solid #eee;
+        display: flex;
+        flex-direction: column;
     }
-    .line-1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    .name-txt { font-size: 1.1rem; font-weight: 800; color: #000; }
-    .dept-txt { font-size: 0.85rem; color: #666; margin-left: 6px; }
+    .top-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .name-text { font-size: 1.1rem; font-weight: 800; color: #000; }
+    .dept-text { font-size: 0.8rem; color: #777; margin-left: 5px; }
     
-    /* 업무내용(비고): 붉은색 강조로 무엇을 하는 사람인지 바로 확인 */
-    .work-txt { font-size: 0.92rem; color: #e63946; font-weight: 700; line-height: 1.4; }
-
-    /* 버튼 스타일: 실용적 크기 */
-    .btn-wrap { display: flex; gap: 8px; }
-    .tel-btn {
-        display: flex; align-items: center; justify-content: center;
-        width: 55px; height: 38px; border-radius: 4px;
-        text-decoration: none !important; font-size: 0.85rem; font-weight: 800;
+    /* 업무 내용(비고): 붉은색 굵은 글씨로 이름 바로 아래 배치 */
+    .work-text { 
+        font-size: 0.95rem; 
+        color: #d32f2f; 
+        font-weight: 700; 
+        line-height: 1.4;
+        margin-top: 2px;
     }
-    .btn-off { background-color: #f1f3f5; color: #333 !important; border: 1px solid #adb5bd; }
-    .btn-on { background-color: #000; color: #fff !important; }
+
+    /* 버튼 스타일: 직관적인 텍스트 버튼 */
+    .btn-group { display: flex; gap: 6px; }
+    .call-btn {
+        display: flex; align-items: center; justify-content: center;
+        width: 52px; height: 38px; border-radius: 4px;
+        text-decoration: none !important; font-size: 0.82rem; font-weight: 800;
+    }
+    .btn-sub { background-color: #f8f9fa; color: #333 !important; border: 1px solid #ccc; }
+    .btn-main { background-color: #222; color: #fff !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 (KeyError/IndexError 원천 차단 로직)
+# 2. 데이터 로드: '열 이름'을 무시하고 '순서'로 강제 매핑 (KeyError 완전 방지)
 @st.cache_data
 def load_data():
     try:
+        # 폴더 내 첫 번째 CSV 파일 찾기
         csv_files = [f for f in os.listdir('.') if f.endswith('.csv')]
         if not csv_files: return pd.DataFrame()
         
-        # BOM 문자 제거 및 문자열 강제 변환
+        # 데이터 로드 (모든 데이터를 문자열로 변환하여 에러 방지)
         df = pd.read_csv(csv_files[0], encoding='utf-8-sig').astype(str)
         
-        # 열 이름을 무조건 순서대로 강제 재설정 (파일명/헤더 깨짐 방지)
-        # 구분[0], 부서[1], 담당[2], 내선[3], 휴대폰[4], 비고[5]
-        new_cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
-        df.columns = [new_cols[i] for i in range(min(len(df.columns), 6))]
+        # [해결책] 엑셀 헤더가 깨져도 상관없이 순서대로 이름을 새로 붙임
+        # 0:구분, 1:부서명, 2:담당자, 3:전화, 4:휴대폰, 5:비고
+        actual_cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
+        df.columns = [actual_cols[i] for i in range(min(len(df.columns), 6))]
         
         return df.replace('nan', '')
     except:
         return pd.DataFrame()
 
-df = load_data()
+df_raw = load_data()
 
-# 3. 통합 검색창 (상단 고정)
-q = st.text_input("", placeholder="🔍 이름, 업무(대관, 보안, 미화 등) 검색", label_visibility="collapsed")
+# 3. 통합 검색 (전체 데이터 대상)
+search_q = st.text_input("", placeholder="🔍 이름, 부서, 업무(대관, 보안, 미화 등) 검색", label_visibility="collapsed")
 
-# 4. 탭 구성
-tab_names = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
-tabs = st.tabs(tab_names)
+# 4. 탭 구성 (보안 -> 시설 -> 미화 -> 총무 -> 지원 -> 기타 -> 전체)
+tab_list = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
+tabs = st.tabs(tab_list)
 
-def show_list(target_df):
+def render_ui(target_df):
     if target_df.empty:
-        st.caption("표시할 내용이 없습니다.")
+        st.caption("결과가 없습니다.")
         return
     
     for _, row in target_df.iterrows():
-        # 데이터 매핑
-        nm, dp, wk = row.get('c_name', ''), row.get('c_dept', ''), row.get('c_work', '')
-        t_raw, h_raw = row.get('c_tel', ''), row.get('c_hp', '')
+        # 순서 기반으로 저장한 열 이름 사용
+        name, dept, work = row['c_name'].strip(), row['c_dept'].strip(), row['c_work'].strip()
+        tel, hp = row['c_tel'].strip(), row['c_hp'].strip()
         
-        # 전화번호 정제
-        t_link = re.sub(r'[^0-9*]', '', t_raw)
-        h_link = re.sub(r'[^0-9]', '', h_raw)
+        # 전화번호 숫자만 추출
+        t_link = re.sub(r'[^0-9*]', '', tel)
+        h_link = re.sub(r'[^0-9]', '', hp)
         
-        title = nm if nm else dp
-        sub = dp if nm else ""
+        title = name if name else dept
+        sub = dept if name else ""
 
         st.markdown(f'''
-            <div class="item-container">
-                <div class="line-1">
-                    <div class="info">
-                        <span class="name-txt">{title}</span>
-                        <span class="dept-txt">{sub}</span>
+            <div class="contact-row">
+                <div class="top-flex">
+                    <div class="info-box">
+                        <span class="name-text">{title}</span>
+                        <span class="dept-text">{sub}</span>
                     </div>
-                    <div class="btn-wrap">
-                        {"<a href='tel:"+t_link+"' class='tel-btn btn-off'>내선</a>" if t_link else ""}
-                        {"<a href='tel:"+h_link+"' class='tel-btn btn-on'>직통</a>" if h_link else ""}
+                    <div class="btn-group">
+                        {"<a href='tel:"+t_link+"' class='call-btn btn-sub'>내선</a>" if t_link else ""}
+                        {"<a href='tel:"+h_link+"' class='call-btn btn-main'>직통</a>" if h_link else ""}
                     </div>
                 </div>
-                {"<div class='work-txt'>" + wk + "</div>" if wk else ""}
+                {"<div class='work-text'>" + work + "</div>" if work else ""}
             </div>
         ''', unsafe_allow_html=True)
 
-# 5. [핵심 로직] 검색과 탭 필터링 동시 적용
+# 5. 탭 필터링 및 검색 로직 (전체 검색 -> 탭 분류)
 for i, tab in enumerate(tabs):
     with tab:
-        cat = tab_names[i]
+        current_cat = tab_list[i]
         
-        # 1차 필터링: 탭 카테고리 (전체 탭 제외)
-        if cat == "전체":
-            d_tab = df
+        # 1차 카테고리 필터링
+        if current_cat == "전체":
+            df_tab = df_raw
         else:
-            # '구분' 열이나 '부서' 열에 탭 이름이 포함된 경우
-            d_tab = df[df['c_cat'].str.contains(cat) | df['c_dept'].str.contains(cat)]
+            # '구분' 또는 '부서' 열에서 탭 이름 찾기
+            df_tab = df_raw[df_raw['c_cat'].str.contains(current_cat) | df_raw['c_dept'].str.contains(current_cat)]
         
-        # 2차 필터링: 검색어 적용
-        if q:
+        # 2차 검색어 필터링
+        if search_q:
             # 모든 열을 합쳐서 검색어가 있는지 확인
-            d_final = d_tab[d_tab.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
+            df_final = df_tab[df_tab.apply(lambda r: r.str.contains(search_q, case=False).any(), axis=1)]
         else:
-            d_final = d_tab
+            df_final = df_tab
             
-        show_list(d_final)
+        render_ui(df_final)
