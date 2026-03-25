@@ -3,21 +3,16 @@ import pandas as pd
 import os
 import re
 
-# 1. 페이지 설정 및 모바일 최적화
+# 1. 페이지 설정 및 디자인 (가장 견고한 방식)
 st.set_page_config(page_title="현장 연락처 Hub", layout="wide")
 
 st.markdown("""
     <style>
     .block-container { padding: 0.5rem !important; background-color: #fff; }
     header, footer { visibility: hidden; }
-    
-    /* 검색창 강조 */
     .stTextInput input { border: 2px solid #000 !important; border-radius: 4px !important; height: 45px !important; }
 
-    /* 리스트 아이템 디자인 */
-    .contact-item { padding: 12px 0; border-bottom: 1px solid #eee; }
-    
-    /* [핵심] 업무 내용(비고): 빨간색 박스로 최상단 노출 */
+    /* 업무 내용(비고): 빨간색 박스로 최상단 노출 */
     .work-tag {
         background-color: #fff0f0; color: #d32f2f; padding: 4px 8px;
         border-radius: 4px; font-size: 0.95rem; font-weight: 800;
@@ -47,11 +42,11 @@ def get_clean_data():
         files = [f for f in os.listdir('.') if f.endswith('.csv')]
         if not files: return pd.DataFrame()
         
-        # 모든 데이터를 문자로 읽고 앞뒤 공백/줄바꿈 즉시 제거
+        # [해결책 1] 모든 데이터를 문자로 읽고 앞뒤 공백/줄바꿈(\n, \r) 즉시 제거
         df = pd.read_csv(files[0], encoding='utf-8-sig').astype(str)
-        df = df.apply(lambda x: x.str.strip().replace('nan', ''))
+        df = df.apply(lambda x: x.str.strip().replace(r'\n', '', regex=True).replace(r'\r', '', regex=True).replace('nan', ''))
         
-        # 열 이름을 번호 순서대로 강제 할당 (에러 방지)
+        # [해결책 2] 열 이름을 번호 순서대로 강제 할당 (KeyError 완전 방지)
         # 0:구분, 1:부서, 2:성함, 3:내선, 4:직통, 5:업무
         cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
         df.columns = [cols[i] for i in range(min(len(df.columns), 6))]
@@ -69,7 +64,7 @@ tab_list = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"
 tabs = st.tabs(tab_list)
 
 def render_ui(target_df):
-    # 실제 노출할 데이터가 있는 행만 필터링 (이름, 부서, 업무 중 하나는 있어야 함)
+    # 실제 내용이 있는 행만 필터링
     valid = target_df[(target_df['c_name'] != "") | (target_df['c_dept'] != "") | (target_df['c_work'] != "")]
     
     if valid.empty:
@@ -109,9 +104,7 @@ def render_ui(target_df):
 for i, tab in enumerate(tabs):
     with tab:
         cat = tab_list[i]
-        # 탭 필터링
         d = df if cat == "전체" else df[df['c_cat'].str.contains(cat) | df['c_dept'].str.contains(cat)]
-        # 검색 필터링 (모든 열 대상)
         if q:
             d = d[d.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
         render_ui(d)
