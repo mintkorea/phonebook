@@ -3,99 +3,138 @@ import pandas as pd
 import os
 import re
 
-# 1. 페이지 설정 및 디자인 (불필요한 HTML 제거, 안전한 CSS만 사용)
-st.set_page_config(page_title="성의 연락처", layout="wide")
+# 1. 페이지 설정
+st.set_page_config(page_title="성의 연락처 Hub", layout="wide")
 
+# 2. 강력한 디자인 시스템 (업무 내용 강조 및 모바일 최적화)
 st.markdown("""
     <style>
-    .block-container { padding: 1rem !important; }
+    .block-container { padding: 0.5rem !important; background-color: #fcfcfc; }
     header, footer { visibility: hidden; }
-    /* 검색창 가독성 향상 */
-    .stTextInput input { border: 2px solid #000 !important; }
-    /* 업무 내용(비고) 강조 */
-    .work-highlight { color: #d32f2f; font-weight: bold; font-size: 0.9rem; }
+    
+    /* 검색창 스타일 */
+    .stTextInput input {
+        border: 2px solid #000 !important;
+        border-radius: 8px !important;
+        height: 48px !important;
+        font-size: 1.1rem !important;
+    }
+
+    /* 연락처 카드 디자인 */
+    .contact-card {
+        background: white;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid #eee;
+        margin-bottom: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    
+    /* 업무 내용(비고) 박스: 무엇을 하는 사람인지 최우선 노출 */
+    .work-tag {
+        background-color: #fff0f0;
+        color: #d32f2f;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 0.92rem;
+        font-weight: 800;
+        margin-bottom: 8px;
+        display: inline-block;
+        border: 1px solid #ffcdd2;
+    }
+
+    .main-info { display: flex; justify-content: space-between; align-items: center; }
+    .name-text { font-size: 1.15rem; font-weight: 800; color: #111; }
+    .dept-text { font-size: 0.85rem; color: #666; margin-left: 5px; }
+
+    /* 버튼 디자인 */
+    .btn-row { display: flex; gap: 8px; margin-top: 5px; }
+    .call-btn {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        height: 40px; border-radius: 6px; text-decoration: none !important;
+        font-size: 0.85rem; font-weight: 700;
+    }
+    .btn-tel { background-color: #f1f3f5; color: #333 !important; border: 1px solid #dee2e6; }
+    .btn-hp { background-color: #000; color: #fff !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 (열 이름 무관, 위치 기반 매핑)
+# 3. 데이터 로드 및 "강제 세척" 로직
 @st.cache_data
-def load_data():
+def get_processed_data():
     try:
-        csv_files = [f for f in os.listdir('.') if f.endswith('.csv')]
-        if not csv_files: return pd.DataFrame()
-        # 모든 데이터를 텍스트로 읽고 결측치 제거
-        df = pd.read_csv(csv_files[0], encoding='utf-8-sig').astype(str)
-        df = df.replace('nan', '')
-        # 열 이름을 표준화 (0:구분, 1:부서, 2:담당, 3:내선, 4:휴대폰, 5:업무)
-        new_cols = ['cat', 'dept', 'name', 'tel', 'hp', 'work']
-        df.columns = [new_cols[i] for i in range(min(len(df.columns), 6))]
-        return df
+        files = [f for f in os.listdir('.') if f.endswith('.csv')]
+        if not files: return pd.DataFrame()
+        
+        # 데이터 읽기 및 모든 칸의 유령 공백 제거
+        df = pd.read_csv(files[0], encoding='utf-8-sig').astype(str)
+        df = df.apply(lambda x: x.str.strip()) 
+        
+        # [핵심] 열 이름이 무엇이든 '순서'대로 강제 재설정 (KeyError 완전 방지)
+        # 0:구분, 1:부서, 2:성함, 3:내선, 4:직통, 5:업무
+        standard_cols = ['cat', 'dept', 'name', 'tel', 'hp', 'work']
+        df.columns = [standard_cols[i] for i in range(min(len(df.columns), 6))]
+        
+        return df.replace('nan', '')
     except Exception as e:
-        st.error(f"데이터 로드 에러: {e}")
+        st.error(f"데이터 세척 중 오류: {e}")
         return pd.DataFrame()
 
-df = load_data()
+df = get_processed_data()
 
-# 3. 통합 검색 (전체 데이터 대상)
-search_q = st.text_input("", placeholder="🔍 이름, 부서, 업무(대관, 보안 등)를 입력하세요", label_visibility="collapsed")
+# 4. 통합 검색창
+q = st.text_input("", placeholder="🔍 성함, 부서, 담당 업무(대관, 주차, 보안 등) 검색", label_visibility="collapsed")
 
-# 4. 탭 구성 (보안 -> 시설 -> 미화 -> 총무 -> 지원 -> 기타 -> 전체)
-tab_list = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
-tabs = st.tabs(tab_list)
+# 5. 탭 구성
+tabs = st.tabs(["보안", "시설", "미화", "총무", "지원", "기타", "전체"])
 
-def render_secure_ui(target_df):
-    if target_df.empty:
-        st.info("표시할 연락처가 없습니다.")
+def render_ui(data):
+    if data.empty:
+        st.caption("검색 결과가 없습니다.")
         return
     
-    for _, row in target_df.iterrows():
-        # 데이터 안전하게 가져오기
-        name, dept, work = row['name'].strip(), row['dept'].strip(), row['work'].strip()
-        tel, hp = row['tel'].strip(), row['hp'].strip()
+    for _, row in data.iterrows():
+        # 데이터 매핑
+        nm, dp, wk = row['name'], row['dept'], row['work']
+        tl, hp = row['tel'], row['hp']
         
-        # 이름이 없으면 부서를 제목으로 사용
-        display_name = name if name else dept
-        display_dept = dept if name else ""
+        # 전화번호 정제
+        tl_link = re.sub(r'[^0-9*]', '', tl)
+        hp_link = re.sub(r'[^0-9]', '', hp)
+        
+        title = nm if nm else dp
+        sub = dp if nm else ""
 
-        # [디자인] Streamlit 기본 위젯을 사용하여 깨짐 방지
-        with st.container():
-            col1, col2 = st.columns([3, 1])
-            
-            with col1:
-                # 이름과 부서
-                st.markdown(f"**{display_name}** <small style='color:#666'>{display_dept}</small>", unsafe_allow_html=True)
-                # 업무 내용 (빨간색 강조)
-                if work:
-                    st.markdown(f"<span class='work-highlight'> 업무: {work}</span>", unsafe_allow_html=True)
-            
-            with col2:
-                # 버튼 레이아웃
-                btn_cols = st.columns(2)
-                if tel:
-                    clean_tel = re.sub(r'[^0-9*]', '', tel)
-                    btn_cols[0].markdown(f'<a href="tel:{clean_tel}" style="text-decoration:none;"><button style="width:100%; height:40px; border:1px solid #ccc; border-radius:4px; background:#f8f9fa; font-weight:bold; cursor:pointer;">내선</button></a>', unsafe_allow_html=True)
-                if hp:
-                    clean_hp = re.sub(r'[^0-9]', '', hp)
-                    btn_cols[1].markdown(f'<a href="tel:{clean_hp}" style="text-decoration:none;"><button style="width:100%; height:40px; border:none; border-radius:4px; background:#000; color:#fff; font-weight:bold; cursor:pointer;">직통</button></a>', unsafe_allow_html=True)
-            
-            st.divider() # 행 구분선
+        st.markdown(f'''
+            <div class="contact-card">
+                {"<div class='work-tag'>업무: " + wk + "</div>" if wk else ""}
+                <div class="main-info">
+                    <div>
+                        <span class="name-text">{title}</span>
+                        <span class="dept-text">{sub}</span>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    {"<a href='tel:"+tl_link+"' class='call-btn btn-tel'>내선 호출</a>" if tl_link else ""}
+                    {"<a href='tel:"+hp_link+"' class='call-btn btn-hp'>직통 연결</a>" if hp_link else ""}
+                </div>
+            </div>
+        ''', unsafe_allow_html=True)
 
-# 5. 검색 및 탭 필터링 로직 (완벽하게 작동하도록 보정)
+# 6. 필터링 로직 (탭 + 검색)
 for i, tab in enumerate(tabs):
     with tab:
-        current_cat = tab_list[i]
+        category = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"][i]
         
-        # 1. 탭 필터링
-        if current_cat == "전체":
-            filtered = df
+        # 탭 필터링
+        if category == "전체":
+            d_tab = df
         else:
-            # 'cat'(구분) 또는 'dept'(부서)에 탭 이름이 포함된 행 추출
-            filtered = df[df['cat'].str.contains(current_cat) | df['dept'].str.contains(current_cat)]
+            # 첫 번째(구분)나 두 번째(부서) 열에서 카테고리 확인
+            d_tab = df[df['cat'].str.contains(category) | df['dept'].str.contains(category)]
         
-        # 2. 검색어 필터링 (탭 필터링된 결과 내에서 수행)
-        if search_q:
-            # 모든 열을 합쳐서 검색어가 있는지 확인
-            search_mask = filtered.apply(lambda r: r.str.contains(search_q, case=False).any(), axis=1)
-            filtered = filtered[search_mask]
+        # 검색어 필터링
+        if q:
+            d_tab = d_tab[d_tab.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
             
-        render_secure_ui(filtered)
+        render_ui(d_tab)
