@@ -2,127 +2,151 @@ import streamlit as st
 import pandas as pd
 import re
 
-# 1. 페이지 설정
+# 1. 페이지 설정 및 폰트 로드
 st.set_page_config(page_title="현장 연락처 Hub", layout="wide")
 
-# 2. 고급스러운 모던 리스트 UI (CSS)
+# 2. 고급스러운 Enterprise UI 디자인 (CSS)
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
     
-    /* 배경 및 기본 폰트 */
-    .block-container { padding: 1.5rem !important; background-color: #ffffff; font-family: 'Pretendard', sans-serif; }
+    /* 전체 배경 및 폰트 설정 */
+    .block-container { padding: 1rem 3rem !important; background-color: #f9fafb; font-family: 'Pretendard', sans-serif; }
     header, footer { visibility: hidden; }
     
-    /* 검색창: 얇은 보더와 아이콘 느낌 */
+    /* 검색창 디자인 (미니멀) */
     .stTextInput input {
-        border-radius: 10px !important;
-        border: 1px solid #f0f0f0 !important;
-        background-color: #f8f9fa !important;
-        padding: 12px 15px !important;
-        font-size: 1rem !important;
+        border-radius: 12px !important;
+        border: 1px solid #e0e0e0 !important;
+        padding: 12px 20px !important;
+        background-color: white !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
     }
 
-    /* 리스트 스타일 (카드 대신 선으로 구분) */
-    .contact-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 18px 5px;
-        border-bottom: 1px solid #f1f1f1;
+    /* 연락처 카드 디자인 (전문가급) */
+    .contact-card {
+        background: white;
+        border-radius: 16px;
+        padding: 22px;
+        margin-bottom: 14px;
+        border: 1px solid #f0f1f4;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
-    
-    .info-group { display: flex; flex-direction: column; gap: 4px; }
-    
-    /* 업무 내용: 이름 위에 작고 단정하게 */
-    .work-text {
-        font-size: 0.75rem;
+
+    /* [해결책] 업무 내용 태그: 연한 네이비로 변경 */
+    .work-tag {
+        display: inline-block;
+        background-color: #e0f2fe; /* 연한 네이비 배경 */
+        color: #1e3a8a; /* 짙은 네이비 글씨 */
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 0.8rem;
         font-weight: 700;
-        color: #e11d48; /* 세련된 레드 포인트 */
-        margin-bottom: -2px;
+        margin-bottom: 12px;
+        letter-spacing: -0.01em;
     }
-    
-    .name-text { font-size: 1.15rem; font-weight: 700; color: #1a1a1a; }
-    .dept-text { font-size: 0.85rem; color: #888; margin-left: 6px; font-weight: 400; }
 
-    /* 버튼: 미니멀한 라운드 스타일 */
-    .btn-group { display: flex; gap: 8px; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; }
+    .name-text { font-size: 1.3rem; font-weight: 800; color: #111; display: block; }
+    .dept-text { font-size: 0.9rem; color: #6b7280; font-weight: 400; margin-top: 1px; }
+
+    /* 버튼 그룹 디자인 살짝 보정 */
+    .btn-group { display: flex; gap: 9px; }
     .c-btn {
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 8px 16px;
-        border-radius: 20px; /* 알약 모양 */
+        gap: 6px;
+        padding: 10px 18px;
+        border-radius: 10px;
         text-decoration: none !important;
-        font-size: 0.8rem;
+        font-size: 0.85rem;
         font-weight: 600;
         transition: 0.2s;
     }
-    .btn-tel { background-color: #f1f3f5; color: #495057 !important; }
-    .btn-hp { background-color: #212529; color: #ffffff !important; }
+    .btn-tel { background-color: white; color: #374151 !important; border: 1px solid #d1d5db; }
+    .btn-hp { background-color: #0f172a; color: #ffffff !important; }
     
-    /* 탭 메뉴 커스텀 */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { font-size: 1rem; color: #adb5bd; }
-    .stTabs [aria-selected="true"] { color: #000 !important; font-weight: 800 !important; }
+    /* 탭 메뉴 디자인 정돈 */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; border-bottom: 1px solid #eaeaea; }
+    .stTabs [data-baseweb="tab"] { background-color: transparent; border-radius: 8px; color: #6b7280; padding: 10px 16px; }
+    .stTabs [aria-selected="true"] {
+        background-color: white !important;
+        color: #0f172a !important;
+        font-weight: 800 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. 데이터 로드 (구글 시트 연동)
+# 3. 데이터 로드 (매핑 로직 유지)
 @st.cache_data(ttl=300)
 def get_live_data():
-    URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
+    SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
     try:
-        df = pd.read_csv(URL).astype(str)
+        df = pd.read_csv(SHEET_URL).astype(str)
         df = df.apply(lambda x: x.str.strip().replace(r'\n', ' ', regex=True).replace('nan', ''))
-        # 열 매핑 고정
         cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
         df.columns = [cols[i] for i in range(min(len(df.columns), len(cols)))]
         return df
-    except:
+    exceptException as e:
+        st.error(f"데이터 로드 실패: {e}")
         return pd.DataFrame()
 
 df = get_live_data()
 
-# 4. 검색창
-q = st.text_input("", placeholder="🔍 성함 또는 부서 검색", label_visibility="collapsed")
+# 4. 검색창 (Placeholder 수정)
+q = st.text_input("", placeholder="🔍 담당자, 부서, 주요 업무로 검색...", label_visibility="collapsed")
 
 # 5. 메인 UI
 tab_names = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
 tabs = st.tabs(tab_names)
 
+# 아이콘 (수화기)
+icon_phone = '<svg width="14" height="14" viewBox="0 0 24 24" style="fill: currentColor;"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.26 1.12.32 2.33.5 3.57.5.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.18 2.45.5 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>'
+
 def render_ui(target_df):
     if target_df.empty:
-        st.caption("결과가 없습니다.")
+        st.info("검색 조건에 맞는 연락처가 없습니다.")
         return
-    
+        
     for _, row in target_df.iterrows():
-        nm, dp, wk = row['c_name'], row['c_dept'], row['c_work']
-        # [해결] 변수명 오타 수정 완료
+        nm = row['c_name'] if row['c_name'] else row['c_dept']
+        dp = row['c_dept'] if row['c_name'] else ""
+        wk = row['c_work']
+        
         tel_link = re.sub(r'[^0-9*]', '', str(row['c_tel']))
         hp_link = re.sub(r'[^0-9]', '', str(row['c_hp']))
 
-        st.markdown(f"""
-            <div class="contact-item">
-                <div class="info-group">
-                    {f'<span class="work-text">{wk}</span>' if wk else ''}
-                    <div>
-                        <span class="name-text">{nm if nm else dp}</span>
-                        <span class="dept-text">{dp if nm else ""}</span>
-                    </div>
+        # [해결 핵심] 업무 태그 HTML 수정
+        card_html = f"""
+        <div class="contact-card">
+            {f'<div class="work-tag">{wk}</div>' if wk else ''}
+            <div class="info-row">
+                <div>
+                    <span class="name-text">{nm}</span>
+                    <span class="dept-text">{dp}</span>
                 </div>
                 <div class="btn-group">
-                    {f'<a href="tel:{tel_link}" class="c-btn btn-tel">내선</a>' if tel_link else ''}
-                    {f'<a href="tel:{hp_link}" class="c-btn btn-hp">직통</a>' if hp_link else ''}
+                    {f'<a href="tel:{tel_link}" class="c-btn btn-tel">{icon_phone}내선</a>' if tel_link else ''}
+                    {f'<a href="tel:{hp_link}" class="c-btn btn-hp">{icon_phone}직통전화</a>' if hp_link else ''}
                 </div>
             </div>
-        """, unsafe_allow_html=True)
+        </div>
+        """
+        st.markdown(card_html, unsafe_allow_html=True)
 
-# 6. 필터 및 실행
+# 6. 필터링 및 출력
 for i, tab in enumerate(tabs):
     with tab:
         category = tab_names[i]
-        filtered = df if category == "전체" else df[df['c_cat'].str.contains(category, na=False) | df['c_dept'].str.contains(category, na=False)]
+        
+        if category == "전체":
+            filtered = df
+        else:
+            filtered = df[df['c_cat'].str.contains(category, na=False) | df['c_dept'].str.contains(category, na=False)]
+        
         if q:
             filtered = filtered[filtered.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
+        
         render_ui(filtered)
