@@ -3,67 +3,62 @@ import pandas as pd
 import re
 
 # 1. 페이지 설정
-st.set_page_config(page_title="현장 연락처 Hub - 봄 에디션", layout="wide")
+st.set_page_config(page_title="현장 연락처 Hub", layout="wide")
 
-# 2. 봄 테마 UI 디자인 (CSS)
+# 2. 배경색을 모두 제거한 미니멀 디자인 (CSS)
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
     
-    /* 전체 배경: 아주 연한 벚꽃 핑크색 */
-    .block-container { padding: 1.5rem 2rem !important; background-color: #fff9fb; font-family: 'Pretendard', sans-serif; }
+    /* 전체 배경을 완전 흰색으로 고정 */
+    .block-container { padding: 1.5rem 2rem !important; background-color: #ffffff; font-family: 'Pretendard', sans-serif; }
     header, footer { visibility: hidden; }
     
-    /* 검색창: 둥글고 화사하게 */
+    /* 검색창: 배경 없이 선으로만 강조 */
     .stTextInput input {
-        border-radius: 20px !important;
-        border: 1px solid #ffd1dc !important;
-        padding: 10px 20px !important;
-        background-color: white !important;
+        border-radius: 12px !important;
+        border: 1px solid #f0f0f0 !important;
+        padding: 12px 18px !important;
+        background-color: #fafafa !important;
     }
 
-    /* 연락처 카드: 그림자 대신 은은한 선 */
-    .contact-card {
-        background: white;
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 12px;
-        border: 1px solid #ffe4e6;
-        box-shadow: 0 2px 8px rgba(255, 209, 220, 0.2);
+    /* 연락처 아이템: 카드 배경을 빼고 구분선으로만 처리 */
+    .contact-item {
+        padding: 20px 5px;
+        border-bottom: 1px solid #f8f8f8; /* 아주 연한 구분선 */
+        background: none;
     }
-
+    
     .info-row { display: flex; justify-content: space-between; align-items: center; }
     
-    /* 성함과 부서 */
-    .name-text { font-size: 1.25rem; font-weight: 800; color: #4a5568; }
-    .dept-text { font-size: 0.9rem; color: #a0aec0; margin-left: 6px; font-weight: 400; }
+    /* 이름과 부서 */
+    .name-text { font-size: 1.2rem; font-weight: 800; color: #334155; }
+    .dept-text { font-size: 0.85rem; color: #94a3b8; margin-left: 6px; font-weight: 400; }
 
-    /* [요청사항 반영] 업무내용: 배경 없이 이름 아래에 텍스트로만 */
+    /* [요청사항] 업무내용: 이름 아래 배경 없이 텍스트로만 */
     .work-desc {
         font-size: 0.85rem;
-        color: #718096; /* 차분한 그레이 */
-        margin-top: 6px;
+        color: #64748b;
+        margin-top: 4px;
         line-height: 1.4;
-        font-weight: 500;
     }
 
-    /* 버튼: 연한 네이비와 핑크 포인트 */
+    /* 버튼: 연한 네이비/그레이 조합 */
     .btn-group { display: flex; gap: 8px; }
     .c-btn {
         display: flex; align-items: center; justify-content: center;
         padding: 8px 16px;
-        border-radius: 12px;
+        border-radius: 10px;
         text-decoration: none !important;
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         font-weight: 700;
-        transition: 0.2s;
     }
-    .btn-tel { background-color: #f1f5f9; color: #475569 !important; border: 1px solid #e2e8f0; }
-    .btn-hp { background-color: #64748b; color: #ffffff !important; } /* 연한 네이비 계열 */
+    .btn-tel { background-color: #f1f5f9; color: #475569 !important; }
+    .btn-hp { background-color: #1e293b; color: #ffffff !important; }
     
-    /* 탭 스타일: 핑크 포인트 */
+    /* 탭 스타일: 핑크 포인트만 살짝 유지 */
     .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [aria-selected="true"] { color: #ff69b4 !important; font-weight: 800 !important; border-bottom-color: #ff69b4 !important; }
+    .stTabs [aria-selected="true"] { color: #f472b6 !important; font-weight: 800 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -78,13 +73,12 @@ def get_live_data():
         df.columns = [cols[i] for i in range(min(len(df.columns), len(cols)))]
         return df
     except Exception as e:
-        st.error(f"데이터 로드 실패: {e}")
         return pd.DataFrame()
 
 df = get_live_data()
 
 # 4. 상단 검색
-q = st.text_input("", placeholder="🔍 봄바람 타고 누구를 찾으시나요?", label_visibility="collapsed")
+q = st.text_input("", placeholder="🔍 성함 또는 부서 검색", label_visibility="collapsed")
 
 # 5. 메인 UI
 tab_names = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
@@ -92,11 +86,10 @@ tabs = st.tabs(tab_names)
 
 def render_ui(target_df):
     if target_df.empty:
-        st.info("찾으시는 연락처가 없네요. 🌸")
+        st.caption("결과가 없습니다.")
         return
         
     for _, row in target_df.iterrows():
-        # 데이터 정리
         nm = row['c_name'] if row['c_name'] else row['c_dept']
         dp = row['c_dept'] if row['c_name'] else ""
         wk = row['c_work']
@@ -104,9 +97,9 @@ def render_ui(target_df):
         tel_link = re.sub(r'[^0-9*]', '', str(row['c_tel']))
         hp_link = re.sub(r'[^0-9]', '', str(row['c_hp']))
 
-        # 카드 렌더링 (순서 변경: 이름/부서 -> 업무내용)
+        # 배경색 없이 선으로 구분된 리스트 아이템
         st.markdown(f"""
-            <div class="contact-card">
+            <div class="contact-item">
                 <div class="info-row">
                     <div>
                         <div>
