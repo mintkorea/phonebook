@@ -1,99 +1,65 @@
 import streamlit as st
 import pandas as pd
 
-# 1. 페이지 설정 및 디자인(CSS)
-st.set_page_config(page_title="성의교정 연락처 검색", layout="wide")
-
+# 1. 디자인 설정
+st.set_page_config(page_title="성의교정 통합 연락처", layout="wide")
 st.markdown("""
     <style>
-    html, body, [class*="st-"] {
-        font-size: 16px;
-        font-family: 'Pretendard', sans-serif;
-    }
-    .dept-title {
-        font-size: 24px !important;
-        font-weight: 700 !important;
-        color: #1E3A8A;
-        margin-bottom: 5px;
-    }
-    .name-text {
-        font-size: 20px !important;
-        font-weight: 600 !important;
-        color: #374151;
-    }
-    /* 안내 문구 스타일 */
-    .info-box {
-        background-color: #F3F4F6;
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 5px solid #3B82F6;
-    }
+    .contact-card { border: 1px solid #ddd; border-radius: 10px; padding: 15px; margin-bottom: 10px; background-color: white; }
+    .main-title { font-size: 1.2rem; font-weight: bold; color: #000; }
+    .sub-title { font-size: 0.9rem; color: #666; margin-bottom: 10px; }
+    .info-text { font-size: 0.9rem; margin-bottom: 3px; }
+    .tag { background-color: #eee; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-right: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 로드 (컬럼 강제 고정 및 밀림 방지)
-@st.cache_data
+# 2. 구글 시트 데이터 로드 (시트 ID를 입력하세요)
+SHEET_ID = "YOUR_SPREADSHEET_ID" 
+URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
+
+@st.cache_data(ttl=60)
 def load_data():
-    file_path = 'contacts.csv'
-    fixed_columns = ['카테고리', '부서_업체명', '성명', '직함', '내선_일반', '휴대폰', '담당업무_비고']
-    try:
-        df = pd.read_csv(file_path, names=fixed_columns, header=0, engine='python', on_bad_lines='skip').fillna('')
-        df = df.iloc[:, :7] 
-        return df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-    except Exception as e:
-        st.error(f"⚠️ 데이터 로드 오류: {e}")
-        return None
+    return pd.read_csv(URL).fillna("")
 
 df = load_data()
 
-# 3. 카드 렌더링 함수 (휴대폰 유무 로직 포함)
-def render_contact_cards(data):
-    for _, row in data.iterrows():
-        with st.container():
-            # 부서명 출력 (2폰트 크게)
-            st.markdown(f'<div class="dept-title">📍 {row["부서_업체명"]}</div>', unsafe_allow_html=True)
-            
-            has_mobile = str(row['휴대폰']).strip() != ""
-            
-            if has_mobile:
-                # 휴대폰이 있는 경우: 기존 3단 배열
-                c1, c2, c3 = st.columns([1, 1, 2])
-                with c1:
-                    name_label = f"{row['성명']} {row['직함']}".strip()
-                    st.markdown(f'👤 <span class="name-text">{name_label if name_label else "담당자"}</span>', unsafe_allow_html=True)
-                with c2:
-                    st.write(f"📞 **내선**: {row['내선_일반']}")
-                with c3:
-                    st.write(f"📱 **휴대폰**: {row['휴대폰']}")
-            else:
-                # 휴대폰이 없는 경우: 내선과 업무만 강조하는 2단 배열
-                c1, c2 = st.columns([1, 3])
-                with c1:
-                    name_label = f"{row['성명']} {row['직함']}".strip()
-                    st.markdown(f'👤 <span class="name-text">{name_label if name_label else "담당부서"}</span>', unsafe_allow_html=True)
-                with c2:
-                    st.write(f"📞 **내선 연락처**: {row['내선_일반']}")
-            
-            # 담당 업무 (항상 강조)
-            st.info(f"📝 **담당 업무**: {row['담당업무_비고']}")
-            st.divider()
+# 3. 통합 검색 인터페이스
+st.title("📞 성의교정 연락처 관리 시스템")
+query = st.text_input("검색어를 입력하세요 (부서, 담당자, 전화, 업무 전체 검색 가능)", "")
 
-# 4. 메인 UI 출력
-st.title("🏢 성의교정 통합 연락처 검색")
+if query:
+    mask = df.apply(lambda row: row.astype(str).str.contains(query, case=False).any(), axis=1)
+    df = df[mask]
 
-if df is not None:
-    search_term = st.text_input("🔍 부서, 성함 또는 업무 키워드를 입력하세요", "")
+# 4. 6개 카테고리 탭 생성
+categories = ["시설관리", "보안팀", "미화팀", "행정지원", "협력업체", "비상연락"]
+tabs = st.tabs(categories)
 
-    if search_term:
-        mask = df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)
-        res = df[mask]
-        st.subheader(f"✅ 검색 결과 ({len(res)}건)")
-        render_contact_cards(res)
-    else:
-        # 카테고리별 탭 구성
-        categories = df['카테고리'].unique().tolist()
-        if categories:
-            tabs = st.tabs(categories)
-            for i, cat in enumerate(categories):
-                with tabs[i]:
-                    render_contact_cards(df[df['카테고리'] == cat])
+for i, cat in enumerate(categories):
+    with tabs[i]:
+        cat_df = df[df['카테고리'] == cat]
+        if cat_df.empty:
+            st.info("조회된 자료가 없습니다.")
+        else:
+            for _, row in cat_df.iterrows():
+                with st.container():
+                    st.markdown('<div class="contact-card">', unsafe_allow_html=True)
+                    
+                    # 담당자 유무에 따른 메인 포맷 결정
+                    if row['담당자']:
+                        st.markdown(f'<div class="main-title">👤 {row["담당자"]}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="sub-title">{row["부서명"]}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="main-title">🏢 {row["부서명"]}</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="sub-title">담당자 없음</div>', unsafe_allow_html=True)
+                    
+                    # 상세 정보 (데이터가 있는 경우만 표출)
+                    if row['전화'] or row['휴대폰']:
+                        tel = f"📞 내선: {row['전화']}" if row['전화'] else ""
+                        hp = f" 📱 HP: {row['휴대폰']}" if row['휴대폰'] else ""
+                        st.markdown(f'<div class="info-text">{tel}{hp}</div>', unsafe_allow_html=True)
+                    
+                    if row['업무']:
+                        st.markdown(f'<div class="info-row"><span class="tag">업무</span> {row["업무"]}</div>', unsafe_allow_html=True)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
