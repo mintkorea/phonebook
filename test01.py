@@ -82,37 +82,51 @@ def make_tel(raw):
 
     return "02"+nums, nums
 
-# 렌더
 def render(df):
     if df.empty:
         st.write("결과 없음")
         return
 
     for _, r in df.iterrows():
-        nm = r['c_name']
-        dp = r['c_dept']
-        tel_raw = r['c_tel']
-        hp = r['c_hp']
-        wk = r['c_work']
+        nm = str(r.get('c_name', ''))
+        dp = str(r.get('c_dept', ''))
+        tel_raw = str(r.get('c_tel', ''))
+        hp = str(r.get('c_hp', ''))
+        wk = str(r.get('c_work', ''))
 
-        dial, tel_display = make_tel(tel_raw)
+        # 전화번호 숫자만 추출
+        nums = re.sub(r'[^0-9]', '', tel_raw)
 
-        # 주간/야간 처리
+        dial = ""
+        tel_display = ""
+
+        # 정상 전화번호만 처리
+        if nums and len(nums) >= 4:
+            if len(nums) == 4:
+                dial = "023147" + nums
+            elif nums.startswith("02"):
+                dial = nums
+            else:
+                dial = "02" + nums
+            tel_display = tel_raw
+
+        # "주간 / 야간" 같은 경우 처리
         if "주간" in tel_raw or "야간" in tel_raw:
-            wk = (tel_raw + " " + wk).strip()
+            wk = f"{tel_raw} {wk}".strip()
             tel_display = ""
             dial = ""
 
+        # HTML 안전 구성
         name_html = f'<span class="name-text">{nm}</span>' if nm else ''
         dept_html = f'<span class="dept-text">{dp}</span>' if dp else ''
         tel_html = f'<span class="highlight-tel">{tel_display}</span>' if tel_display else ''
         work_html = f'<div class="work-desc">{wk}</div>' if wk else ''
+        btn_html = f'<a href="tel:{dial}" class="c-btn btn-tel">T</a>' if dial else ''
 
-        t_btn = f'<a href="tel:{dial}" class="c-btn">T</a>' if dial else ''
-
-        st.markdown(f"""
+        # 🔥 핵심: 구조 절대 깨지지 않게 한 블록으로 출력
+        html = f"""
         <div class="contact-item">
-            <div>
+            <div class="info-group">
                 <div class="name-row">
                     {name_html}
                     {dept_html}
@@ -121,9 +135,11 @@ def render(df):
                 {work_html}
             </div>
             <div class="btn-group">
-                {t_btn}
+                {btn_html}
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """
+
+        st.markdown(html, unsafe_allow_html=True)
 
 render(df)
