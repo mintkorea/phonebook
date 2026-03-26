@@ -3,7 +3,7 @@ import pandas as pd
 import re
 
 # 1. 페이지 설정
-st.set_page_config(page_title="현장 연락처 Hub", layout="wide")
+st.set_config(page_title="현장 연락처 Hub", layout="wide")
 
 # 2. UI 디자인 (CSS)
 st.markdown("""
@@ -49,16 +49,17 @@ def get_live_data():
 
 df = get_live_data()
 
-# 4. [개편] 검색어 입력 (전체 데이터 대상)
-q = st.text_input("", placeholder="🔍 성함 또는 부서 검색 (전체 검색)", label_visibility="collapsed")
+# 4. [수정] 검색창 (어떤 상황에서도 전체 데이터셋에서 검색 실행)
+q = st.text_input("", placeholder="🔍 성함 또는 부서 검색 (어디서든 전체 검색)", key="global_search", label_visibility="collapsed")
 
-# 1단계: 검색어가 있다면 전체 데이터에서 먼저 필터링
+# 검색어가 있으면 전체 데이터(df)에서 필터링, 없으면 원본 유지
 if q:
-    search_result_df = df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
+    # 모든 열을 대상으로 검색어 포함 여부 확인
+    filtered_base = df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
 else:
-    search_result_df = df
+    filtered_base = df
 
-# 5. 탭 구성 (검색 결과 내에서 탭별로 보기)
+# 5. 탭 구성
 tab_names = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
 tabs = st.tabs(tab_names)
 
@@ -71,7 +72,7 @@ def get_dial_number(raw_num):
 
 def render_ui(target_df):
     if target_df.empty:
-        st.caption("결과가 없습니다. 🌱")
+        st.caption("검색 결과가 없습니다. 🌱")
         return
         
     for _, row in target_df.iterrows():
@@ -81,13 +82,13 @@ def render_ui(target_df):
         # 보안팀 판별 (총무팀 예외)
         is_real_security = ("보안" in dp) and ("총무" not in dp)
 
-        # 텍스트 가공
+        # 텍스트 및 스타일 가공
         display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
         tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
         tel_html = f'<span class="{tel_class}">{display_tel}</span>' if display_tel else ''
         hp_html = f'<span class="highlight-hp">{raw_hp}</span>' if raw_hp else ''
 
-        # 노출 로직 (보안팀 휴대폰 차단 포함)
+        # 노출 로직 (보안팀 휴대폰 차단)
         if is_real_security:
             if not nm and raw_tel:
                 display_name = f'<span class="{tel_class}" style="margin-left:0; font-size:1.4rem;">{display_tel}</span>'
@@ -106,16 +107,16 @@ def render_ui(target_df):
 
         st.markdown(f'<div class="contact-item"><div class="info-group"><div class="name-row"><span class="name-text">{display_name}</span><span class="dept-text">{display_dept}</span>{tel_inline}</div>{work_div}</div><div class="btn-group">{t_btn_html}{m_btn_html}</div></div>', unsafe_allow_html=True)
 
-# 6. 실행 (탭 선택 시 검색 결과 내에서 필터링)
+# 6. 실행 (탭을 클릭하면 검색 결과 내에서 해당 부서만 다시 필터링)
 for i, tab in enumerate(tabs):
     with tab:
         category = tab_names[i]
         if category == "전체":
-            render_ui(search_result_df)
+            render_ui(filtered_base)
         else:
-            # 검색 결과 중 해당 카테고리에 맞는 데이터만 추출
-            tab_filtered_df = search_result_df[
-                search_result_df['c_cat'].str.contains(category, na=False) | 
-                search_result_df['c_dept'].str.contains(category, na=False)
+            # 검색된 결과(filtered_base) 중에서 해당 탭의 카테고리만 매칭
+            tab_final = filtered_base[
+                filtered_base['c_cat'].str.contains(category, na=False) | 
+                filtered_base['c_dept'].str.contains(category, na=False)
             ]
-            render_ui(tab_filtered_df)
+            render_ui(tab_final)
