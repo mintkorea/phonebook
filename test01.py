@@ -4,35 +4,6 @@ import re
 
 st.set_page_config(page_title="성의교정 주요전화", layout="wide")
 
-# 초성
-def get_chosung(text):
-    CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
-    result = ""
-    for ch in str(text):
-        if '가' <= ch <= '힣':
-            result += CHO[(ord(ch)-ord('가'))//588]
-        else:
-            result += ch
-    return result
-
-# CSS
-st.markdown("""
-<style>
-.block-container {padding:1rem;font-family:sans-serif;}
-.contact-item {
-    display:flex;justify-content:space-between;align-items:center;
-    border-bottom:1px solid #eee;padding:10px 5px;
-}
-.name-row {display:flex;flex-wrap:wrap;gap:6px;}
-.name-text {font-weight:800;}
-.dept-text {color:#888;font-size:0.9rem;}
-.highlight-tel {font-weight:800;}
-.work-desc {color:#10b981;font-size:0.85rem;}
-.btn-group {display:flex;gap:6px;}
-.c-btn {width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;border-radius:8px;text-decoration:none;}
-</style>
-""", unsafe_allow_html=True)
-
 st.title("성의교정 주요전화")
 
 # 데이터
@@ -42,7 +13,6 @@ def load():
     df = pd.read_csv(url).astype(str)
     df = df.replace('nan','')
     df.columns = ['c_cat','c_dept','c_name','c_tel','c_hp','c_work'][:len(df.columns)]
-    df['chosung'] = (df['c_name']+df['c_dept']).apply(get_chosung)
     return df
 
 df = load()
@@ -52,94 +22,68 @@ def clear():
     st.session_state.q = ""
 
 col1, col2 = st.columns([8,2])
+
 with col1:
-    st.text_input("", key="q", placeholder="검색")
+    st.text_input("검색", key="q")
+
 with col2:
     st.button("초기화", on_click=clear)
 
 q = st.session_state.get("q","")
 
 if q:
-    if all('ㄱ'<=c<='ㅎ' for c in q):
-        df = df[df['chosung'].str.contains(q)]
-    else:
-        df = df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
+    df = df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
 
-# 전화번호 처리
-def make_tel(raw):
-    raw = str(raw)
-    nums = re.sub(r'[^0-9]', '', raw)
-
-    # "주간 2020" 같은 경우 필터
-    if not nums or len(nums) < 3:
-        return "", raw  # 버튼 없음, 텍스트 유지
-
+# 전화 처리
+def make_tel(x):
+    nums = re.sub(r'[^0-9]', '', str(x))
+    if len(nums) < 4:
+        return "", x
     if len(nums) == 4:
         return "023147"+nums, nums
-
     if nums.startswith("02"):
         return nums, nums
-
     return "02"+nums, nums
 
-def render(df):
-    if df.empty:
-        st.write("결과 없음")
-        return
+# UI (HTML 없음 → 절대 안 깨짐)
+tabs = st.tabs(["전체","보안","시설","미화","총무","지원","기타"])
 
-    for _, r in df.iterrows():
-        nm = str(r.get('c_name', ''))
-        dp = str(r.get('c_dept', ''))
-        tel_raw = str(r.get('c_tel', ''))
-        hp = str(r.get('c_hp', ''))
-        wk = str(r.get('c_work', ''))
+def render(data):
+    for _, r in data.iterrows():
+        name = r['c_name']
+        dept = r['c_dept']
+        tel_raw = r['c_tel']
+        work = r['c_work']
 
-        # 전화번호 숫자만 추출
-        nums = re.sub(r'[^0-9]', '', tel_raw)
+        dial, tel = make_tel(tel_raw)
 
-        dial = ""
-        tel_display = ""
-
-        # 정상 전화번호만 처리
-        if nums and len(nums) >= 4:
-            if len(nums) == 4:
-                dial = "023147" + nums
-            elif nums.startswith("02"):
-                dial = nums
-            else:
-                dial = "02" + nums
-            tel_display = tel_raw
-
-        # "주간 / 야간" 같은 경우 처리
+        # 주간/야간 처리
         if "주간" in tel_raw or "야간" in tel_raw:
-            wk = f"{tel_raw} {wk}".strip()
-            tel_display = ""
+            work = f"{tel_raw} {work}"
+            tel = ""
             dial = ""
 
-        # HTML 안전 구성
-        name_html = f'<span class="name-text">{nm}</span>' if nm else ''
-        dept_html = f'<span class="dept-text">{dp}</span>' if dp else ''
-        tel_html = f'<span class="highlight-tel">{tel_display}</span>' if tel_display else ''
-        work_html = f'<div class="work-desc">{wk}</div>' if wk else ''
-        btn_html = f'<a href="tel:{dial}" class="c-btn btn-tel">T</a>' if dial else ''
+        with st.container():
+            col1, col2 = st.columns([8,2])
 
-        # 🔥 핵심: 구조 절대 깨지지 않게 한 블록으로 출력
-        html = f"""
-        <div class="contact-item">
-            <div class="info-group">
-                <div class="name-row">
-                    {name_html}
-                    {dept_html}
-                    {tel_html}
-                </div>
-                {work_html}
-            </div>
-            <div class="btn-group">
-                {btn_html}
-            </div>
-        </div>
-        """
+            with col1:
+                st.markdown(f"**{name}** ({dept})")
+                if tel:
+                    st.write(f"📞 {tel}")
+                if work:
+                    st.caption(work)
 
-        st.markdown(html, unsafe_allow_html=True)
+            with col2:
+                if dial:
+                    st.link_button("전화", f"tel:{dial}")
 
-render(df)
+for i, tab in enumerate(tabs):
+    with tab:
+        if i == 0:
+            render(df)
+        else:
+            keyword = ["보안","시설","미화","총무","지원","기타"][i-1]
+            render(df[
+                df['c_dept'].str.contains(keyword, na=False) |
+                df['c_cat'].str.contains(keyword, na=False)
+            ])
