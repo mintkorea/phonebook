@@ -18,7 +18,7 @@ def get_chosung(text):
             result += char
     return result
 
-# 2. UI 디자인 (정렬 및 레이아웃 최적화)
+# 2. UI 디자인 (모바일 최적화 상단 고정형 레이아웃)
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
@@ -29,38 +29,57 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { font-size: 1.2rem !important; font-weight: 700 !important; color: #94a3b8 !important; }
     .stTabs [aria-selected="true"] { color: #10b981 !important; font-weight: 900 !important; }
 
+    /* 리스트 아이템 전체 구조 */
     .contact-item { 
-        display: flex; 
-        align-items: center; 
-        padding: 12px 0; 
+        padding: 15px 0; 
         border-bottom: 1px solid #f1f5f9; 
-        gap: 10px;
+        display: flex;
+        flex-direction: column; /* 세로 배열로 변경하여 업무내용 공간 확보 */
+        gap: 4px;
     }
     
-    .info-group { flex: 1; min-width: 0; }
-    .name-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
-    .name-text { font-size: 1.15rem; font-weight: 800; color: #1e293b; white-space: nowrap; }
-    .dept-text { font-size: 0.85rem; color: #94a3b8; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .work-desc { font-size: 0.85rem; color: #10b981; font-weight: 600; line-height: 1.3; word-break: keep-all; }
+    /* 상단 라인: 이름(왼쪽) + 번호/버튼(오른쪽) */
+    .top-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+    }
 
-    .tel-container { 
-        display: flex; 
-        flex-direction: column; 
-        align-items: flex-end; 
-        justify-content: center; 
-        width: 140px; 
+    .name-group {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .name-text { font-size: 1.15rem; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dept-text { font-size: 0.85rem; color: #94a3b8; font-weight: 400; white-space: nowrap; }
+
+    /* 우측 영역: 번호 + 버튼 */
+    .right-side {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         flex-shrink: 0;
     }
-    .highlight-tel { font-size: 1.15rem; font-weight: 700; color: #334155; line-height: 1.2; }
+
+    .tel-info {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
+
+    .highlight-tel { font-size: 1.15rem; font-weight: 700; color: #334155; line-height: 1; }
     .navy-tel { font-family: 'Times New Roman', serif; color: #000080 !important; font-weight: 900 !important; font-style: italic; }
     .highlight-hp { font-size: 1rem; color: #059669; font-weight: 700; line-height: 1.2; }
 
     .btn-group { 
         display: flex; 
-        gap: 6px; 
-        width: 80px; 
+        gap: 4px; 
+        width: 76px; 
         justify-content: flex-end;
-        flex-shrink: 0; 
     }
     .c-btn { 
         display: inline-flex; 
@@ -75,6 +94,16 @@ st.markdown("""
     }
     .btn-tel { background-color: #f1f5f9; color: #475569 !important; border: 1px solid #e2e8f0; }
     .btn-hp { background-color: #ecfdf5; color: #059669 !important; border: 1px solid #d1fae5; }
+
+    /* 하단 라인: 업무내용 (너비를 100% 사용하여 개행 방지 및 가독성 확보) */
+    .work-desc { 
+        font-size: 0.85rem; 
+        color: #10b981; 
+        font-weight: 600; 
+        line-height: 1.4; 
+        padding-right: 10px;
+        word-break: keep-all; 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -129,50 +158,41 @@ def render_ui(target_df):
         display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
         tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
 
-        # 1. 업무 내용 영역 (비어있으면 빈 문자열, 있으면 태그 포함)
-        work_html = f'<div class="work-desc">{wk}</div>' if wk and wk.strip() else ""
-
-        # 2. 전화번호 영역 조립
+        # 전화번호 및 버튼 HTML 빌드
         tel_inner = ""
-        if raw_tel:
-            tel_inner += f'<span class="{tel_class}">{display_tel}</span>'
-        if raw_hp:
-            tel_inner += f'<span class="highlight-hp">{raw_hp}</span>'
-        tel_html = f'<div class="tel-container">{tel_inner}</div>'
-
-        # 3. 버튼 영역 조립
+        if raw_tel: tel_inner += f'<span class="{tel_class}">{display_tel}</span>'
+        if raw_hp: tel_inner += f'<span class="highlight-hp">{raw_hp}</span>'
+        
         dial_tel = get_dial_number(raw_tel)
         t_btn = f'<a href="tel:{dial_tel}" class="c-btn btn-tel">T</a>' if dial_tel else ''
         m_btn = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
-        btn_html = f'<div class="btn-group">{t_btn}{m_btn}</div>'
 
-        # 4. 전체 행 최종 조립 (중첩 중괄호 없이 깔끔하게 합침)
-        final_item_html = (
+        # 전체 아이템 구성 (상단 라인과 하단 업무내용 분리)
+        final_html = (
             f'<div class="contact-item">'
-            f'    <div class="info-group">'
-            f'        <div class="name-row">'
+            f'    <div class="top-line">'
+            f'        <div class="name-group">'
             f'            <span class="name-text">{display_name}</span>'
             f'            <span class="dept-text">{display_dept}</span>'
             f'        </div>'
-            f'        {work_html}'
+            f'        <div class="right-side">'
+            f'            <div class="tel-info">{tel_inner}</div>'
+            f'            <div class="btn-group">{t_btn}{m_btn}</div>'
+            f'        </div>'
             f'    </div>'
-            f'    {tel_html}'
-            f'    {btn_html}'
+            f'    {f"<div class=\"work-desc\">{wk}</div>" if wk and wk.strip() else ""}'
             f'</div>'
         )
-        
-        st.markdown(final_item_html, unsafe_allow_html=True)
-        
+        st.markdown(final_html, unsafe_allow_html=True)
 
-# 7. 실행
+# 7. 탭 실행
 tab_names = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
 tabs = st.tabs(tab_names)
 
 for i, tab in enumerate(tabs):
     with tab:
         category = tab_names[i]
-        if category == "전체":
-            render_ui(filtered_base)
-        else:
-            tab_final = filtered_base[filtered_base['c_cat_display'].str.contains(category, na=False) | filtered_base['c_dept'].str.contains(category, na=False)]
-            render_ui(tab_final)
+        target = filtered_base if category == "전체" else \
+                 filtered_base[filtered_base['c_cat_display'].str.contains(category, na=False) | 
+                               filtered_base['c_dept'].str.contains(category, na=False)]
+        render_ui(target)
