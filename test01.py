@@ -3,7 +3,7 @@ import pandas as pd
 import re
 
 # 1. 페이지 설정
-st.set_config(page_title="현장 연락처 Hub", layout="wide")
+st.set_page_config(page_title="현장 연락처 Hub", layout="wide")
 
 # 2. UI 디자인 (CSS)
 st.markdown("""
