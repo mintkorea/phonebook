@@ -158,16 +158,25 @@ def render_ui(target_df):
         display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
         tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
 
+        # --- [핵심 수정] 보안팀 번호 숨김 로직 ---
+        is_security = "보안" in dp
+        
         # 전화번호 및 버튼 HTML 빌드
         tel_inner = ""
-        if raw_tel: tel_inner += f'<span class="{tel_class}">{display_tel}</span>'
-        if raw_hp: tel_inner += f'<span class="highlight-hp">{raw_hp}</span>'
+        if raw_tel: 
+            tel_inner += f'<span class="{tel_class}">{display_tel}</span>'
+        
+        # 보안팀이면 번호 텍스트는 추가하지 않음 (기능은 M 버튼에서 처리)
+        if raw_hp and not is_security: 
+            tel_inner += f'<span class="highlight-hp">{raw_hp}</span>'
         
         dial_tel = get_dial_number(raw_tel)
         t_btn = f'<a href="tel:{dial_tel}" class="c-btn btn-tel">T</a>' if dial_tel else ''
+        
+        # M 버튼은 보안팀이라도 번호가 있으면 생성 (기능 유지)
         m_btn = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
 
-        # 전체 아이템 구성 (상단 라인과 하단 업무내용 분리)
+        # 전체 아이템 구성
         final_html = (
             f'<div class="contact-item">'
             f'    <div class="top-line">'
