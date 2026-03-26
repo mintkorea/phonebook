@@ -5,16 +5,13 @@ import re
 # 1. 페이지 설정
 st.set_page_config(page_title="현장 연락처 Hub", layout="wide")
 
-# 2. UI 디자인 (CSS) - 폰트 모양 및 스타일 차별화
+# 2. UI 디자인 (CSS)
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
-    
-    /* 기본 폰트 설정 */
     .block-container { padding: 1rem !important; background-color: #ffffff; font-family: 'Pretendard', sans-serif; }
     header, footer { visibility: hidden; }
     
-    /* 탭 스타일 */
     .stTabs [data-baseweb="tab"] { font-size: 1.15rem !important; font-weight: 700 !important; color: #94a3b8 !important; }
     .stTabs [aria-selected="true"] { color: #10b981 !important; font-weight: 900 !important; }
 
@@ -24,26 +21,15 @@ st.markdown("""
     .name-text { font-size: 1.1rem; font-weight: 800; color: #334155; }
     .dept-text { font-size: 0.85rem; color: #94a3b8; font-weight: 400; }
     
-    /* [차별화 1] 일반 내선번호: 고딕체, 다크그레이, 매우 굵게 */
-    .highlight-tel { 
-        font-family: 'Pretendard', sans-serif;
-        font-size: 1.2rem; 
-        color: #475569; 
-        font-weight: 800; 
-        margin-left: 4px; 
-    }
+    /* [스타일] 일반 내선 (고딕, 다크그레이) */
+    .highlight-tel { font-family: 'Pretendard', sans-serif; font-size: 1.2rem; color: #475569; font-weight: 800; margin-left: 4px; }
     
-    /* [차별화 2] *1 내선번호: 명조(Serif) 느낌의 폰트 스타일, 네이비, 밑줄, 자간 넓게 */
-    .navy-tel { 
-        font-family: 'Times New Roman', serif; /* 폰트 모양 차별화 */
-        color: #000080 !important; 
-        font-weight: 900 !important; 
-        font-style: italic; /* 기울임꼴 추가로 더 다르게 */
-        letter-spacing: 1px; /* 글자 간격 벌림 */
-        text-decoration: underline !important;
-        text-underline-offset: 4px;
-    }
+    /* [스타일] *1 내선 (네이비, 명조체, 밑줄) */
+    .navy-tel { font-family: 'Times New Roman', serif; color: #000080 !important; font-weight: 900 !important; font-style: italic; letter-spacing: 1px; text-decoration: underline !important; text-underline-offset: 4px; }
     
+    /* [스타일] 모바일 번호 (민트색 강조) */
+    .highlight-hp { font-size: 1.1rem; color: #059669; font-weight: 800; margin-left: 4px; }
+
     .work-desc { font-size: 0.85rem; color: #10b981; font-weight: 600; margin-top: 2px; }
 
     /* 버튼 사이즈 초소형화 */
@@ -69,7 +55,7 @@ def get_live_data():
 
 df = get_live_data()
 
-# 4. 상단 검색 및 탭
+# 4. 검색 및 탭
 q = st.text_input("", placeholder="🔍 성함 또는 부서 검색", label_visibility="collapsed")
 tab_names = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
 tabs = st.tabs(tab_names)
@@ -77,10 +63,8 @@ tabs = st.tabs(tab_names)
 def get_dial_number(raw_num):
     clean_num = re.sub(r'[^0-9*]', '', str(raw_num))
     if not clean_num: return ""
-    if clean_num.startswith('*1'):
-        return "022258" + clean_num.replace('*1', '')
-    if len(clean_num) >= 7:
-        return "02" + clean_num
+    if clean_num.startswith('*1'): return "022258" + clean_num.replace('*1', '')
+    if len(clean_num) >= 7: return "02" + clean_num
     return "023147" + clean_num
 
 def render_ui(target_df, current_tab):
@@ -92,30 +76,47 @@ def render_ui(target_df, current_tab):
         nm, dp, wk = row['c_name'], row['c_dept'], row['c_work']
         raw_tel, raw_hp = str(row['c_tel']), str(row['c_hp'])
 
-        # 총무부 전시용 번호 정제 (02-3147 삭제)
-        display_tel = raw_tel
-        if "총무" in dp:
-            display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "")
+        # 총무부 국번 제거 텍스트 가공
+        display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
+        
+        # 스타일 결정
+        is_navy = display_tel.startswith('*1')
+        tel_class = "highlight-tel navy-tel" if is_navy else "highlight-tel"
+        
+        # UI 요소 생성
+        tel_html = f'<span class="{tel_class}">{display_tel}</span>' if display_tel else ''
+        hp_html = f'<span class="highlight-hp">{raw_hp}</span>' if raw_hp else ''
 
+        # --- [탭별 노출 로직 정교화] ---
+        
+        # 1. 미화 탭: 모바일 우선 노출
+        if current_tab == "미화":
+            tel_inline = hp_html if raw_hp else tel_html
+            
+        # 2. 보안 탭: 내선 무조건 노출 (이름 없으면 큰 번호)
+        elif current_tab == "보안":
+            if not nm and raw_tel:
+                display_name, display_dept, tel_inline = f'<span class="{tel_class}" style="margin-left:0; font-size:1.4rem;">{display_tel}</span>', dp, ""
+            else:
+                display_name, display_dept, tel_inline = (nm if nm else dp), (dp if nm else ""), tel_html
+            continue # 보안은 별도 처리 후 루프 진행 방지 위해 분기
+
+        # 3. 시설, 총무, 지원, 기타 탭: 내선 우선, 없으면 모바일
+        elif current_tab in ["시설", "총무", "지원", "기타"]:
+            tel_inline = tel_html if raw_tel else hp_html
+            
+        # 4. 전체 탭 및 기타 기본값
+        else:
+            tel_inline = tel_html if raw_tel else ""
+
+        display_name = nm if nm else dp
+        display_dept = dp if nm else ""
+
+        # 실제 전화 걸기 번호
         dial_tel = get_dial_number(raw_tel)
         dial_hp = re.sub(r'[^0-9]', '', raw_hp)
 
-        # 폰트 모양 차별화 클래스 적용
-        is_navy = display_tel.startswith('*1')
-        tel_class = "highlight-tel navy-tel" if is_navy else "highlight-tel"
-        tel_html = f'<span class="{tel_class}">{display_tel}</span>' if display_tel else ''
-        
-        # 부서별 노출 로직
-        if current_tab == "보안" and ("보안" in dp) and not nm:
-            # 보안팀 번호 강조 (보안팀은 이름을 안 쓰니까 번호를 더 크게)
-            display_name = f'<span class="{tel_class}" style="margin-left:0; font-size:1.4rem;">{display_tel}</span>' if display_tel else dp
-            display_dept, tel_inline = (dp if display_tel else ""), ""
-        elif (current_tab == "시설") or ("총무" in dp):
-            display_name, display_dept, tel_inline = (nm if nm else dp), (dp if nm else ""), tel_html
-        else:
-            display_name, display_dept, tel_inline = (nm if nm else dp), (dp if nm else ""), ""
-
-        # 버튼 및 한 줄 렌더링
+        # 버튼 생성 및 렌더링
         t_btn = f'<a href="tel:{dial_tel}" class="c-btn btn-tel">T</a>' if dial_tel else ''
         m_btn = f'<a href="tel:{dial_hp}" class="c-btn btn-hp">M</a>' if dial_hp else ''
         work_div = f'<div class="work-desc">{wk}</div>' if wk else ''
