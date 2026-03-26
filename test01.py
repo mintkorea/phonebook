@@ -49,9 +49,17 @@ def get_live_data():
 
 df = get_live_data()
 
-# 4. 검색 및 탭
-q = st.text_input("", placeholder="🔍 성함 또는 부서 검색", label_visibility="collapsed")
-tab_names = ["보안", "시설", "미화", "총무", "지원", "기타", "전체"]
+# 4. [개편] 검색어 입력 (전체 데이터 대상)
+q = st.text_input("", placeholder="🔍 성함 또는 부서 검색 (전체 검색)", label_visibility="collapsed")
+
+# 1단계: 검색어가 있다면 전체 데이터에서 먼저 필터링
+if q:
+    search_result_df = df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
+else:
+    search_result_df = df
+
+# 5. 탭 구성 (검색 결과 내에서 탭별로 보기)
+tab_names = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
 tabs = st.tabs(tab_names)
 
 def get_dial_number(raw_num):
@@ -61,7 +69,7 @@ def get_dial_number(raw_num):
     if len(clean_num) >= 7: return "02" + clean_num
     return "023147" + clean_num
 
-def render_ui(target_df, current_tab):
+def render_ui(target_df):
     if target_df.empty:
         st.caption("결과가 없습니다. 🌱")
         return
@@ -70,43 +78,44 @@ def render_ui(target_df, current_tab):
         nm, dp, wk = row['c_name'], row['c_dept'], row['c_work']
         raw_tel, raw_hp = str(row['c_tel']), str(row['c_hp'])
         
-        # [수정된 판별 로직] 보안 단어가 있더라도 총무가 있으면 보안팀이 아님
+        # 보안팀 판별 (총무팀 예외)
         is_real_security = ("보안" in dp) and ("총무" not in dp)
 
-        # 총무부 국번 제거 가공
+        # 텍스트 가공
         display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
-        
-        # 스타일 클래스
         tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
         tel_html = f'<span class="{tel_class}">{display_tel}</span>' if display_tel else ''
         hp_html = f'<span class="highlight-hp">{raw_hp}</span>' if raw_hp else ''
 
-        # --- [노출 로직: 순수 보안팀만 휴대폰 차단] ---
+        # 노출 로직 (보안팀 휴대폰 차단 포함)
         if is_real_security:
             if not nm and raw_tel:
                 display_name = f'<span class="{tel_class}" style="margin-left:0; font-size:1.4rem;">{display_tel}</span>'
                 display_dept, tel_inline = dp, ""
             else:
                 display_name, display_dept, tel_inline = (nm if nm else dp), (dp if nm else ""), tel_html
-            m_btn_html = "" # 휴대폰 버튼 차단
+            m_btn_html = ""
         else:
-            # 총무팀을 포함한 모든 부서: 내선 우선 -> 없으면 모바일
             display_name, display_dept = (nm if nm else dp), (dp if nm else "")
             tel_inline = tel_html if raw_tel else hp_html
             m_btn_html = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
 
-        # 공통 T 버튼 및 출력
         dial_tel = get_dial_number(raw_tel)
         t_btn_html = f'<a href="tel:{dial_tel}" class="c-btn btn-tel">T</a>' if dial_tel else ''
         work_div = f'<div class="work-desc">{wk}</div>' if wk else ''
 
         st.markdown(f'<div class="contact-item"><div class="info-group"><div class="name-row"><span class="name-text">{display_name}</span><span class="dept-text">{display_dept}</span>{tel_inline}</div>{work_div}</div><div class="btn-group">{t_btn_html}{m_btn_html}</div></div>', unsafe_allow_html=True)
 
-# 5. 실행
+# 6. 실행 (탭 선택 시 검색 결과 내에서 필터링)
 for i, tab in enumerate(tabs):
     with tab:
         category = tab_names[i]
-        filtered = df if category == "전체" else df[df['c_cat'].str.contains(category, na=False) | df['c_dept'].str.contains(category, na=False)]
-        if q:
-            filtered = filtered[filtered.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
-        render_ui(filtered, category)
+        if category == "전체":
+            render_ui(search_result_df)
+        else:
+            # 검색 결과 중 해당 카테고리에 맞는 데이터만 추출
+            tab_filtered_df = search_result_df[
+                search_result_df['c_cat'].str.contains(category, na=False) | 
+                search_result_df['c_dept'].str.contains(category, na=False)
+            ]
+            render_ui(tab_filtered_df)
