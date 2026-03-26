@@ -23,11 +23,9 @@ st.markdown("""
     .name-text { font-size: 1.1rem; font-weight: 800; color: #334155; }
     .dept-text { font-size: 0.85rem; color: #94a3b8; font-weight: 400; }
     
-    /* 내선번호 스타일 */
     .highlight-tel { font-family: 'Pretendard', sans-serif; font-size: 1.4rem; color: #475569; font-weight: 800; margin-left: 4px; }
     .navy-tel { font-family: 'Times New Roman', serif; color: #000080 !important; font-weight: 900 !important; font-style: italic; letter-spacing: 0.5px; text-decoration: none !important; }
     
-    /* 휴대폰 번호 스타일 */
     .highlight-hp { font-size: 1.3rem; color: #059669; font-weight: 800; margin-left: 4px; }
 
     .work-desc { font-size: 0.85rem; color: #10b981; font-weight: 600; margin-top: 2px; }
@@ -41,7 +39,7 @@ st.markdown("""
 
 st.markdown('<div class="main-title">성의교정 주요전화</div>', unsafe_allow_html=True)
 
-# 3. 데이터 로드 및 ⭐ 우선순위 정렬 (별표 제거 로직 반영)
+# 3. 데이터 로드 및 [구분] 항목 기준 정렬
 @st.cache_data(ttl=300)
 def get_live_data():
     URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
@@ -51,13 +49,13 @@ def get_live_data():
         cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
         df.columns = [cols[i] for i in range(min(len(df.columns), len(cols)))]
         
-        # [수정] 별표가 포함된 행을 우선순위(1)로 설정
-        df['is_pinned'] = df['c_work'].str.contains("⭐", na=False).astype(int)
+        # [변경 핵심] 'c_cat'(구분) 컬럼에 ⭐가 있으면 우선순위로 인식
+        df['is_pinned'] = df['c_cat'].str.contains("⭐", na=False).astype(int)
         
-        # [수정] 화면 표시용 데이터에서는 별표를 제거 (공백 제거 포함)
-        df['c_work'] = df['c_work'].str.replace("⭐", "", regex=False).str.strip()
+        # 화면 표시용 'c_cat'에서 ⭐ 제거 (깔끔하게 카테고리 이름만 남김)
+        df['c_cat'] = df['c_cat'].str.replace("⭐", "", regex=False).str.strip()
         
-        # 정렬 후 반환 (별표는 없지만 is_pinned 덕분에 상단 고정 유지)
+        # 정렬: 우선순위 -> 부서명 -> 이름 순
         return df.sort_values(by=['is_pinned', 'c_dept', 'c_name'], ascending=[False, True, True])
     except:
         return pd.DataFrame()
@@ -88,22 +86,17 @@ def render_ui(target_df):
         nm, dp, wk = row['c_name'], row['c_dept'], row['c_work']
         raw_tel, raw_hp = str(row['c_tel']), str(row['c_hp'])
         
-        # 순수 보안팀 여부 확인
         is_real_security = ("보안" in dp) and ("총무" not in dp)
 
-        # 텍스트 가공
         display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
         tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
         tel_html = f'<span class="{tel_class}">{display_tel}</span>' if display_tel else ''
         hp_html = f'<span class="highlight-hp">{raw_hp}</span>' if raw_hp else ''
 
-        # --- [노출 제어 로직] ---
         if is_real_security:
-            # 보안팀: 번호 텍스트 미표시, 버튼만 생성
             display_name, display_dept, tel_inline = (nm if nm else dp), (dp if nm else ""), tel_html
             m_btn_html = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
         else:
-            # 그 외 부서: 번호 텍스트와 버튼 모두 노출
             display_name, display_dept = (nm if nm else dp), (dp if nm else "")
             tel_inline = tel_html if raw_tel else hp_html
             m_btn_html = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
@@ -121,5 +114,6 @@ for i, tab in enumerate(tabs):
         if category == "전체":
             render_ui(filtered_base)
         else:
+            # 탭 분류 시 c_cat(구분) 또는 c_dept(부서)에 해당 키워드가 있는지 확인
             tab_final = filtered_base[filtered_base['c_cat'].str.contains(category, na=False) | filtered_base['c_dept'].str.contains(category, na=False)]
             render_ui(tab_final)
