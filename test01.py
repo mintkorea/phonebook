@@ -5,7 +5,7 @@ import re
 # 1. 페이지 설정
 st.set_page_config(page_title="성의교정 주요전화", layout="wide")
 
-# --- 초성 추출 함수 추가 ---
+# --- 초성 추출 함수 ---
 def get_chosung(text):
     CHOSUNG_LIST = [
         'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 
@@ -48,7 +48,7 @@ st.markdown("""
 
 st.markdown('<div class="main-title">성의교정 주요전화</div>', unsafe_allow_html=True)
 
-# 3. 데이터 로드 및 정렬 + 초성 인덱스 생성
+# 3. 데이터 로드 및 정렬 + 지능형 초성 인덱스 생성
 @st.cache_data(ttl=300)
 def get_live_data():
     URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
@@ -62,8 +62,9 @@ def get_live_data():
         df['sort_order'] = df['c_cat'].apply(lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
         df['c_cat_display'] = df['c_cat'].apply(lambda x: re.sub(r'\d+', '', x).strip())
         
-        # --- 검색용 초성 필드 생성 ---
-        df['chosung_key'] = (df['c_name'] + df['c_dept']).apply(get_chosung)
+        # --- [핵심 수정] 검색 노이즈 방지를 위해 공백을 넣어 초성 생성 ---
+        # 이름, 부서, 업무 사이에 공백을 넣어 '허영찬 미화'가 'ㅊㅁ'으로 검색되지 않게 함
+        df['chosung_key'] = (df['c_name'] + " " + df['c_dept'] + " " + df['c_work']).apply(get_chosung)
         
         return df.sort_values(by=['sort_order', 'c_dept', 'c_name'], ascending=[True, True, True])
     except:
@@ -71,23 +72,23 @@ def get_live_data():
 
 df = get_live_data()
 
-# 4. 전역 검색창 (초성 검색 지원)
-q = st.text_input("", placeholder="🔍 성함, 부서 또는 초성 검색 (예: ㅂㅇ)", key="global_search", label_visibility="collapsed")
+# 4. 전역 검색창
+q = st.text_input("", placeholder="🔍 성함, 부서, 업무(누수 등) 초성 검색 가능", key="global_search", label_visibility="collapsed")
 
 if q:
-    # 입력값이 초성으로만 구성되었는지 확인
-    is_chosung_query = all('ㄱ' <= char <= 'ㅎ' for char in q.replace(" ", ""))
+    # 입력값이 초성으로만 구성되었는지 확인 (공백 포함)
+    is_chosung_query = all('ㄱ' <= char <= 'ㅎ' or char == " " for char in q)
     
     if is_chosung_query:
         # 초성 검색: chosung_key에서 찾음
-        filtered_base = df[df['chosung_key'].str.contains(q.replace(" ", ""), case=False, na=False)]
+        filtered_base = df[df['chosung_key'].str.contains(q, case=False, na=False)]
     else:
         # 일반 검색: 전체 컬럼 대조
         filtered_base = df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
 else:
     filtered_base = df
 
-# 5. 탭 구성 및 렌더링 (기존과 동일)
+# 5. 탭 구성 및 렌더링
 tab_names = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
 tabs = st.tabs(tab_names)
 
