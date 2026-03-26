@@ -12,7 +12,7 @@ st.markdown("""
     .block-container { padding: 1rem !important; background-color: #ffffff; font-family: 'Pretendard', sans-serif; }
     header, footer { visibility: hidden; }
     
-    /* [타이틀 스타일] 성의교정 주요전화 */
+    /* 타이틀 스타일 */
     .main-title {
         font-size: 1.8rem;
         font-weight: 900;
@@ -22,7 +22,7 @@ st.markdown("""
         border-left: 5px solid #10b981;
     }
 
-    /* [탭 스타일] 글자 크기 1.35rem (기존 대비 확대) */
+    /* 탭 글자 크기 상향 (1.35rem) */
     .stTabs [data-baseweb="tab"] { 
         font-size: 1.35rem !important; 
         font-weight: 700 !important; 
@@ -33,13 +33,14 @@ st.markdown("""
         font-weight: 900 !important; 
     }
 
+    /* 연락처 항목 디자인 */
     .contact-item { padding: 10px 5px; border-bottom: 1px solid #f8faf9; display: flex; justify-content: space-between; align-items: center; }
     .info-group { display: flex; flex-direction: column; flex: 1; }
     .name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .name-text { font-size: 1.1rem; font-weight: 800; color: #334155; }
     .dept-text { font-size: 0.85rem; color: #94a3b8; font-weight: 400; }
     
-    /* [내선번호 스타일] 1.4rem (기존 1.2rem에서 2pt 분량 확대) */
+    /* 내선번호 크기 상향 (1.4rem) */
     .highlight-tel { 
         font-family: 'Pretendard', sans-serif; 
         font-size: 1.4rem; 
@@ -56,7 +57,7 @@ st.markdown("""
         text-decoration: none !important; 
     }
     
-    /* [모바일 번호 스타일] 내선과 밸런스를 맞추어 1.3rem으로 확대 */
+    /* 휴대폰 번호 크기 상향 (1.3rem) */
     .highlight-hp { 
         font-size: 1.3rem; 
         color: #059669; 
@@ -66,7 +67,7 @@ st.markdown("""
 
     .work-desc { font-size: 0.85rem; color: #10b981; font-weight: 600; margin-top: 2px; }
 
-    /* [버튼 스타일] 클릭하기 편하게 크기 소폭 상향 */
+    /* 버튼 그룹 및 사이즈 조정 */
     .btn-group { display: flex; gap: 6px; flex-shrink: 0; }
     .c-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; text-decoration: none !important; font-size: 0.9rem; font-weight: 800; }
     .btn-tel { background-color: #f1f5f9; color: #475569 !important; }
@@ -77,22 +78,28 @@ st.markdown("""
 # 3. 타이틀 출력
 st.markdown('<div class="main-title">성의교정 주요전화</div>', unsafe_allow_html=True)
 
-# 4. 데이터 로드
+# 4. 데이터 로드 및 ⭐ 우선순위 정렬
 @st.cache_data(ttl=300)
 def get_live_data():
     URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
     try:
         df = pd.read_csv(URL).astype(str)
         df = df.replace('nan', '').apply(lambda x: x.str.strip())
+        # 열 이름 매핑
         cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
         df.columns = [cols[i] for i in range(min(len(df.columns), len(cols)))]
-        return df.sort_values(by=['c_dept', 'c_name'], ascending=True)
+        
+        # ⭐ 별표 포함 여부에 따른 정렬용 가상 열 생성
+        df['is_pinned'] = df['c_work'].str.contains("⭐", na=False).astype(int)
+        
+        # 정렬: 1순위(별표 내림차순), 2순위(부서 오름차순), 3순위(이름 오름차순)
+        return df.sort_values(by=['is_pinned', 'c_dept', 'c_name'], ascending=[False, True, True])
     except:
         return pd.DataFrame()
 
 df = get_live_data()
 
-# 5. 전역 검색창 (어떤 탭에서 검색해도 전체 데이터 기준 검색)
+# 5. 전역 검색창 (어떤 탭에서도 전체 데이터 기반 검색)
 q = st.text_input("", placeholder="🔍 성함 또는 부서 검색", key="global_search", label_visibility="collapsed")
 
 if q:
@@ -120,26 +127,24 @@ def render_ui(target_df):
         nm, dp, wk = row['c_name'], row['c_dept'], row['c_work']
         raw_tel, raw_hp = str(row['c_tel']), str(row['c_hp'])
         
-        # [보안팀 판별] 총무팀이 아닌 순수 보안팀만 휴대폰 차단
+        # 보안팀 판별 로직 (부서명에 '보안'이 있고 '총무'는 없는 경우만 차단)
         is_real_security = ("보안" in dp) and ("총무" not in dp)
 
-        # 텍스트 가공
+        # 텍스트 가공 (총무팀 국번 생략 등)
         display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
         tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
         tel_html = f'<span class="{tel_class}">{display_tel}</span>' if display_tel else ''
         hp_html = f'<span class="highlight-hp">{raw_hp}</span>' if raw_hp else ''
 
-        # 노출 로직
+        # 렌더링 로직 (보안팀 휴대폰 미표출 적용)
         if is_real_security:
-            # 보안팀: 성함 없을 시 번호를 메인으로 크게 (1.6rem)
             if not nm and raw_tel:
                 display_name = f'<span class="{tel_class}" style="margin-left:0; font-size:1.6rem;">{display_tel}</span>'
                 display_dept, tel_inline = dp, ""
             else:
                 display_name, display_dept, tel_inline = (nm if nm else dp), (dp if nm else ""), tel_html
-            m_btn_html = ""
+            m_btn_html = "" # 휴대폰 버튼 제거
         else:
-            # 일반 부서: 내선 우선 -> 없으면 모바일
             display_name, display_dept = (nm if nm else dp), (dp if nm else "")
             tel_inline = tel_html if raw_tel else hp_html
             m_btn_html = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
@@ -150,14 +155,13 @@ def render_ui(target_df):
 
         st.markdown(f'<div class="contact-item"><div class="info-group"><div class="name-row"><span class="name-text">{display_name}</span><span class="dept-text">{display_dept}</span>{tel_inline}</div>{work_div}</div><div class="btn-group">{t_btn_html}{m_btn_html}</div></div>', unsafe_allow_html=True)
 
-# 7. 실행
+# 7. 실행 (탭별 필터링)
 for i, tab in enumerate(tabs):
     with tab:
         category = tab_names[i]
         if category == "전체":
             render_ui(filtered_base)
         else:
-            # 검색 결과 내에서 해당 탭 카테고리 필터링
             tab_final = filtered_base[
                 filtered_base['c_cat'].str.contains(category, na=False) | 
                 filtered_base['c_dept'].str.contains(category, na=False)
