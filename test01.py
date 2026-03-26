@@ -2,192 +2,128 @@ import streamlit as st
 import pandas as pd
 import re
 
-# 1. 페이지 설정
 st.set_page_config(page_title="성의교정 주요전화", layout="wide")
 
-# 초성 추출
+# 초성
 def get_chosung(text):
-    CHOSUNG_LIST = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
+    CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
     result = ""
-    for char in str(text):
-        code = ord(char)
-        if 0xAC00 <= code <= 0xD7A3:
-            result += CHOSUNG_LIST[(code - 0xAC00) // 588]
+    for ch in str(text):
+        if '가' <= ch <= '힣':
+            result += CHO[(ord(ch)-ord('가'))//588]
         else:
-            result += char
+            result += ch
     return result
 
-# 2. CSS
+# CSS
 st.markdown("""
 <style>
-.block-container { padding: 1rem !important; font-family: 'Pretendard', sans-serif; }
-header, footer { visibility: hidden; }
-
-.main-title {
-    font-size: 1.8rem;
-    font-weight: 900;
-    margin-bottom: 1rem;
-    border-left: 5px solid #10b981;
-    padding-left: 10px;
-}
-
-/* 검색창 */
-div[data-testid="column"] > div button {
-    height: 45px;
-    width: 100%;
-}
-
-/* 리스트 */
+.block-container {padding:1rem;font-family:sans-serif;}
 .contact-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 5px;
-    border-bottom: 1px solid #eee;
+    display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid #eee;padding:10px 5px;
 }
-
-.info-group { flex: 1; }
-
-.name-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-}
-
-.name-text { font-weight: 800; font-size: 1.1rem; }
-.dept-text { font-size: 0.85rem; color: #888; }
-
-.highlight-tel { font-size: 1.2rem; font-weight: 800; }
-.highlight-hp { font-size: 1.1rem; color: #059669; font-weight: 800; }
-
-.work-desc {
-    font-size: 0.85rem;
-    color: #10b981;
-}
-
-.btn-group { display: flex; gap: 6px; }
-
-.c-btn {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    text-decoration: none;
-    font-weight: 800;
-}
-
-.btn-tel { background: #f1f5f9; }
-.btn-hp { background: #ecfdf5; border: 1px solid #d1fae5; }
+.name-row {display:flex;flex-wrap:wrap;gap:6px;}
+.name-text {font-weight:800;}
+.dept-text {color:#888;font-size:0.9rem;}
+.highlight-tel {font-weight:800;}
+.work-desc {color:#10b981;font-size:0.85rem;}
+.btn-group {display:flex;gap:6px;}
+.c-btn {width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;border-radius:8px;text-decoration:none;}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-title">성의교정 주요전화</div>', unsafe_allow_html=True)
+st.title("성의교정 주요전화")
 
-# 3. 데이터
-@st.cache_data(ttl=300)
-def load_data():
+# 데이터
+@st.cache_data
+def load():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?output=csv"
-    try:
-        df = pd.read_csv(url).astype(str)
-        df = df.replace('nan','').apply(lambda x: x.str.strip())
+    df = pd.read_csv(url).astype(str)
+    df = df.replace('nan','')
+    df.columns = ['c_cat','c_dept','c_name','c_tel','c_hp','c_work'][:len(df.columns)]
+    df['chosung'] = (df['c_name']+df['c_dept']).apply(get_chosung)
+    return df
 
-        cols = ['c_cat','c_dept','c_name','c_tel','c_hp','c_work']
-        df.columns = cols[:len(df.columns)]
+df = load()
 
-        df['chosung_key'] = (df['c_name'] + df['c_dept']).apply(get_chosung)
-        return df
-    except:
-        return pd.DataFrame()
-
-df = load_data()
-
-# 4. 검색창
-def clear_search():
-    st.session_state.global_search_input = ""
+# 검색
+def clear():
+    st.session_state.q = ""
 
 col1, col2 = st.columns([8,2])
-
 with col1:
-    st.text_input(
-        "",
-        placeholder="🔍 성함, 부서 또는 초성 검색",
-        key="global_search_input",
-        label_visibility="collapsed"
-    )
-
+    st.text_input("", key="q", placeholder="검색")
 with col2:
-    st.button("초기화", on_click=clear_search)
+    st.button("초기화", on_click=clear)
 
-q = st.session_state.get("global_search_input", "")
+q = st.session_state.get("q","")
 
-# 검색 필터
 if q:
-    is_chosung = all('ㄱ' <= c <= 'ㅎ' for c in q.replace(" ",""))
-    if is_chosung:
-        df_filtered = df[df['chosung_key'].str.contains(q, na=False)]
+    if all('ㄱ'<=c<='ㅎ' for c in q):
+        df = df[df['chosung'].str.contains(q)]
     else:
-        df_filtered = df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
-else:
-    df_filtered = df
+        df = df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
 
-# 전화 변환
-def get_tel(num):
-    num = re.sub(r'[^0-9*]', '', str(num))
-    if not num: return ""
-    if len(num) >= 7: return "02" + num
-    return "023147" + num
+# 전화번호 처리
+def make_tel(raw):
+    raw = str(raw)
+    nums = re.sub(r'[^0-9]', '', raw)
 
-# UI 렌더
+    # "주간 2020" 같은 경우 필터
+    if not nums or len(nums) < 3:
+        return "", raw  # 버튼 없음, 텍스트 유지
+
+    if len(nums) == 4:
+        return "023147"+nums, nums
+
+    if nums.startswith("02"):
+        return nums, nums
+
+    return "02"+nums, nums
+
+# 렌더
 def render(df):
     if df.empty:
-        st.caption("결과 없음")
+        st.write("결과 없음")
         return
 
-    for _, row in df.iterrows():
-        nm = row['c_name']
-        dp = row['c_dept']
-        tel = row['c_tel']
-        hp = row['c_hp']
-        wk = row['c_work']
+    for _, r in df.iterrows():
+        nm = r['c_name']
+        dp = r['c_dept']
+        tel_raw = r['c_tel']
+        hp = r['c_hp']
+        wk = r['c_work']
+
+        dial, tel_display = make_tel(tel_raw)
+
+        # 주간/야간 처리
+        if "주간" in tel_raw or "야간" in tel_raw:
+            wk = (tel_raw + " " + wk).strip()
+            tel_display = ""
+            dial = ""
 
         name_html = f'<span class="name-text">{nm}</span>' if nm else ''
         dept_html = f'<span class="dept-text">{dp}</span>' if dp else ''
-        tel_html = f'<span class="highlight-tel">{tel}</span>' if tel else ''
-        hp_html = f'<span class="highlight-hp">{hp}</span>' if hp else ''
+        tel_html = f'<span class="highlight-tel">{tel_display}</span>' if tel_display else ''
         work_html = f'<div class="work-desc">{wk}</div>' if wk else ''
 
-        dial = get_tel(tel)
-        t_btn = f'<a href="tel:{dial}" class="c-btn btn-tel">T</a>' if dial else ''
-        m_btn = f'<a href="tel:{re.sub(r"[^0-9]", "", hp)}" class="c-btn btn-hp">M</a>' if hp else ''
+        t_btn = f'<a href="tel:{dial}" class="c-btn">T</a>' if dial else ''
 
         st.markdown(f"""
         <div class="contact-item">
-            <div class="info-group">
+            <div>
                 <div class="name-row">
                     {name_html}
                     {dept_html}
                     {tel_html}
-                    {hp_html}
                 </div>
                 {work_html}
             </div>
-            <div class="btn-group">{t_btn}{m_btn}</div>
+            <div class="btn-group">
+                {t_btn}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-# 5. 탭
-tabs = st.tabs(["전체","보안","시설","미화","총무","지원","기타"])
-
-for i, tab in enumerate(tabs):
-    with tab:
-        if i == 0:
-            render(df_filtered)
-        else:
-            keyword = ["보안","시설","미화","총무","지원","기타"][i-1]
-            render(df_filtered[
-                df_filtered['c_dept'].str.contains(keyword, na=False) |
-                df_filtered['c_cat'].str.contains(keyword, na=False)
-            ])
+render(df)
