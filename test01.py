@@ -18,123 +18,135 @@ def get_chosung(text):
             result += char
     return result
 
-# 2. 데이터 로드 및 정렬 로직
+# 2. UI 디자인 (CSS)
+st.markdown("""
+    <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+    .block-container { padding: 1rem !important; background-color: #ffffff; font-family: 'Pretendard', sans-serif; }
+    header, footer { visibility: hidden; }
+    .main-title { font-size: 1.8rem; font-weight: 900; color: #1e293b; margin-bottom: 1.2rem; padding-left: 10px; border-left: 5px solid #10b981; }
+    
+    /* 검색창 영역 여백 조정 */
+    .search-container { margin-bottom: 10px; }
+    
+    .stTabs [data-baseweb="tab"] { font-size: 1.35rem !important; font-weight: 700 !important; color: #94a3b8 !important; }
+    .stTabs [aria-selected="true"] { color: #10b981 !important; font-weight: 900 !important; }
+    .contact-item { padding: 10px 5px; border-bottom: 1px solid #f8faf9; display: flex; justify-content: space-between; align-items: center; }
+    .info-group { display: flex; flex-direction: column; flex: 1; }
+    .name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .name-text { font-size: 1.1rem; font-weight: 800; color: #334155; }
+    .dept-text { font-size: 0.85rem; color: #94a3b8; font-weight: 400; }
+    .highlight-tel { font-family: 'Pretendard', sans-serif; font-size: 1.4rem; color: #475569; font-weight: 800; margin-left: 4px; }
+    .navy-tel { font-family: 'Times New Roman', serif; color: #000080 !important; font-weight: 900 !important; font-style: italic; letter-spacing: 0.5px; text-decoration: none !important; }
+    .highlight-hp { font-size: 1.3rem; color: #059669; font-weight: 800; margin-left: 4px; }
+    .work-desc { font-size: 0.85rem; color: #10b981; font-weight: 600; margin-top: 2px; }
+    .btn-group { display: flex; gap: 6px; flex-shrink: 0; }
+    .c-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; text-decoration: none !important; font-size: 0.9rem; font-weight: 800; }
+    .btn-tel { background-color: #f1f5f9; color: #475569 !important; }
+    .btn-hp { background-color: #ecfdf5; color: #059669 !important; border: 1px solid #d1fae5; }
+    
+    /* 초기화 버튼 스타일 커스텀 */
+    div[data-testid="column"] button { height: 45px; width: 100%; border-radius: 10px; border: 1px solid #e2e8f0; background-color: #ffffff; color: #64748b; font-weight: 600; }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.markdown('<div class="main-title">성의교정 주요전화</div>', unsafe_allow_html=True)
+
+# 3. 데이터 로드
 @st.cache_data(ttl=300)
-def load_data():
-    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
+def get_live_data():
+    URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
     try:
-        df = pd.read_csv(url).astype(str)
+        df = pd.read_csv(URL).astype(str)
         df = df.replace('nan', '').apply(lambda x: x.str.strip())
-        # 컬럼명 강제 지정
         cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
-        df.columns = cols[:len(df.columns)]
-        
-        # [정렬] c_cat에서 숫자 추출 (없으면 999)
+        df.columns = [cols[i] for i in range(min(len(df.columns), len(cols)))]
         df['sort_order'] = df['c_cat'].apply(lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
-        # [표시용] c_cat에서 숫자 제거
         df['c_cat_display'] = df['c_cat'].apply(lambda x: re.sub(r'\d+', '', x).strip())
-        # [초성] 검색용 초성 키 생성
         df['chosung_key'] = (df['c_name'] + df['c_dept']).apply(get_chosung)
-        
         return df.sort_values(by=['sort_order', 'c_dept', 'c_name'], ascending=[True, True, True])
     except:
         return pd.DataFrame()
 
-df_origin = load_data()
+df = get_live_data()
 
-# 3. 검색어 초기화 로직 (Session State)
-if 'q' not in st.session_state:
-    st.session_state.q = ""
+# 4. 검색창 및 초기화 버튼 (Session State 활용)
+if 'search_query' not in st.session_state:
+    st.session_state.search_query = ""
 
 def clear_search():
-    st.session_state.q = ""
+    st.session_state.search_query = ""
 
-# 4. 상단 UI (제목 및 검색창)
-st.title("성의교정 주요전화")
+col_search, col_clear = st.columns([8, 2])
 
-col1, col2 = st.columns([8, 2])
+with col_search:
+    q = st.text_input(
+        "", 
+        value=st.session_state.search_query,
+        placeholder="🔍 성함, 부서 또는 초성 검색", 
+        key="global_search_input", # key를 다르게 설정하여 충돌 방지
+        label_visibility="collapsed"
+    )
+    # 입력값이 변경되면 세션 상태 업데이트
+    st.session_state.search_query = q
 
-with col1:
-    # 검색창: value를 session_state.q와 동기화
-    q = st.text_input("🔍 성함, 부서 또는 초성 검색", value=st.session_state.q, key="search_input", label_visibility="collapsed")
-    st.session_state.q = q # 입력 시 상태 업데이트
-
-with col2:
+with col_clear:
     if st.button("초기화", on_click=clear_search):
         st.rerun()
 
-# 5. 검색 필터링 적용
-q_final = st.session_state.q
+# 검색 필터링 로직
+q_final = st.session_state.search_query
 if q_final:
-    # 초성만 입력되었는지 확인
-    is_chosung = all('ㄱ' <= char <= 'ㅎ' for char in q_final.replace(" ", ""))
-    if is_chosung:
-        df = df_origin[df_origin['chosung_key'].str.contains(q_final.replace(" ", ""), case=False, na=False)]
+    is_chosung_query = all('ㄱ' <= char <= 'ㅎ' for char in q_final.replace(" ", ""))
+    if is_chosung_query:
+        filtered_base = df[df['chosung_key'].str.contains(q_final.replace(" ", ""), case=False, na=False)]
     else:
-        df = df_origin[df_origin.apply(lambda r: r.str.contains(q_final, case=False).any(), axis=1)]
+        filtered_base = df[df.apply(lambda r: r.str.contains(q_final, case=False).any(), axis=1)]
 else:
-    df = df_origin
+    filtered_base = df
 
-# 6. 전화번호 처리 함수
-def make_tel(x):
-    nums = re.sub(r'[^0-9]', '', str(x))
-    if not nums or len(nums) < 4:
-        return "", x
-    if len(nums) == 4:
-        return "023147" + nums, nums
-    if nums.startswith("02"):
-        return nums, x
-    return "02" + nums, x
+# 5. 탭 구성 및 렌더링 (기존과 동일)
+tab_names = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
+tabs = st.tabs(tab_names)
 
-# 7. 탭 구성 및 렌더링
-tabs = st.tabs(["전체", "보안", "시설", "미화", "총무", "지원", "기타"])
+def get_dial_number(raw_num):
+    clean_num = re.sub(r'[^0-9*]', '', str(raw_num))
+    if not clean_num: return ""
+    if clean_num.startswith('*1'): return "022258" + clean_num.replace('*1', '')
+    if len(clean_num) >= 7: return "02" + clean_num
+    return "023147" + clean_num
 
-def render(data):
-    if data.empty:
-        st.caption("검색 결과가 없습니다. 🌱")
+def render_ui(target_df):
+    if target_df.empty:
+        st.caption("결과가 없습니다. 🌱")
         return
+    for _, row in target_df.iterrows():
+        nm, dp, wk = row['c_name'], row['c_dept'], row['c_work']
+        raw_tel, raw_hp = str(row['c_tel']), str(row['c_hp'])
+        is_real_security = ("보안" in dp) and ("총무" not in dp)
+        display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
+        tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
+        tel_html = f'<span class="{tel_class}">{display_tel}</span>' if display_tel else ''
+        hp_html = f'<span class="highlight-hp">{raw_hp}</span>' if raw_hp else ''
         
-    for _, r in data.iterrows():
-        name = r['c_name']
-        dept = r['c_dept']
-        tel_raw = r['c_tel']
-        work = r['c_work']
-        
-        dial, tel_display = make_tel(tel_raw)
+        if is_real_security:
+            display_name, display_dept, tel_inline = (nm if nm else dp), (dp if nm else ""), tel_html
+            m_btn_html = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
+        else:
+            display_name, display_dept = (nm if nm else dp), (dp if nm else "")
+            tel_inline = tel_html if raw_tel else hp_html
+            m_btn_html = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
+            
+        dial_tel = get_dial_number(raw_tel)
+        t_btn_html = f'<a href="tel:{dial_tel}" class="c-btn btn-tel">T</a>' if dial_tel else ''
+        work_div = f'<div class="work-desc">{wk}</div>' if wk else ''
+        st.markdown(f'<div class="contact-item"><div class="info-group"><div class="name-row"><span class="name-text">{display_name}</span><span class="dept-text">{display_dept}</span>{tel_inline}</div>{work_div}</div><div class="btn-group">{t_btn_html}{m_btn_html}</div></div>', unsafe_allow_html=True)
 
-        # 특수 처리 (주간/야간 문구가 포함된 경우)
-        if "주간" in tel_raw or "야간" in tel_raw:
-            work = f"[{tel_raw}] {work}".strip()
-            tel_display = ""
-            dial = ""
-
-        with st.container():
-            c1, c2 = st.columns([8, 2])
-            with c1:
-                # 이름이 없으면 부서를 강조
-                main_text = f"**{name}**" if name else f"**{dept}**"
-                sub_text = f"({dept})" if name else ""
-                st.markdown(f"{main_text} {sub_text}")
-                
-                if tel_display:
-                    st.write(f"📞 {tel_display}")
-                if work:
-                    st.caption(work)
-            with c2:
-                if dial:
-                    st.link_button("전화", f"tel:{dial}", use_container_width=True)
-            st.divider() # 가독성을 위한 구분선
-
-# 8. 메인 실행
 for i, tab in enumerate(tabs):
     with tab:
-        if i == 0:
-            render(df)
+        category = tab_names[i]
+        if category == "전체":
+            render_ui(filtered_base)
         else:
-            keyword = ["보안", "시설", "미화", "총무", "지원", "기타"][i-1]
-            # 숫자 제거된 카테고리명 또는 부서명에서 키워드 필터링
-            filtered_df = df[
-                df['c_cat_display'].str.contains(keyword, na=False) | 
-                df['c_dept'].str.contains(keyword, na=False)
-            ]
-            render(filtered_df)
+            tab_final = filtered_base[filtered_base['c_cat_display'].str.contains(category, na=False) | filtered_base['c_dept'].str.contains(category, na=False)]
+            render_ui(tab_final)
