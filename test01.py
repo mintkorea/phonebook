@@ -71,28 +71,25 @@ def get_live_data():
 df = get_live_data()
 
 # 4. 검색창 및 초기화 버튼 (Session State 활용)
-if 'search_query' not in st.session_state:
-    st.session_state.search_query = ""
 
 def clear_search():
-    st.session_state.search_query = ""
+    st.session_state.global_search_input = ""
 
 col_search, col_clear = st.columns([8, 2])
 
 with col_search:
     q = st.text_input(
-        "", 
-        value=st.session_state.search_query,
-        placeholder="🔍 성함, 부서 또는 초성 검색", 
-        key="global_search_input", # key를 다르게 설정하여 충돌 방지
+        "",
+        placeholder="🔍 성함, 부서 또는 초성 검색",
+        key="global_search_input",
         label_visibility="collapsed"
     )
-    # 입력값이 변경되면 세션 상태 업데이트
-    st.session_state.search_query = q
 
 with col_clear:
-    if st.button("초기화", on_click=clear_search):
-        st.rerun()
+    st.button("초기화", on_click=clear_search)
+
+# 검색값 사용
+q_final = st.session_state.get("global_search_input", "")
 
 # 검색 필터링 로직
 q_final = st.session_state.search_query
