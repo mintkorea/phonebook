@@ -29,7 +29,6 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { font-size: 1.2rem !important; font-weight: 700 !important; color: #94a3b8 !important; }
     .stTabs [aria-selected="true"] { color: #10b981 !important; font-weight: 900 !important; }
 
-    /* 전체 아이템 컨테이너 */
     .contact-item { 
         display: flex; 
         align-items: center; 
@@ -38,31 +37,28 @@ st.markdown("""
         gap: 10px;
     }
     
-    /* 1. 왼쪽 정보 영역 (이름, 부서, 업무) */
-    .info-group { flex: 1; min-width: 0; } /* min-width: 0는 텍스트 넘침 방지 */
+    .info-group { flex: 1; min-width: 0; }
     .name-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
     .name-text { font-size: 1.15rem; font-weight: 800; color: #1e293b; white-space: nowrap; }
     .dept-text { font-size: 0.85rem; color: #94a3b8; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .work-desc { font-size: 0.85rem; color: #10b981; font-weight: 600; line-height: 1.3; word-break: keep-all; }
 
-    /* 2. 중간 전화번호 영역 (우측 정렬 고정) */
     .tel-container { 
         display: flex; 
         flex-direction: column; 
         align-items: flex-end; 
         justify-content: center; 
-        width: 130px; /* 번호 영역 너비 고정 */
+        width: 140px; 
         flex-shrink: 0;
     }
-    .highlight-tel { font-size: 1.15rem; font-weight: 700; color: #334155; }
+    .highlight-tel { font-size: 1.15rem; font-weight: 700; color: #334155; line-height: 1.2; }
     .navy-tel { font-family: 'Times New Roman', serif; color: #000080 !important; font-weight: 900 !important; font-style: italic; }
-    .highlight-hp { font-size: 1rem; color: #059669; font-weight: 700; }
+    .highlight-hp { font-size: 1rem; color: #059669; font-weight: 700; line-height: 1.2; }
 
-    /* 3. 오른쪽 버튼 영역 (T/M 유무와 상관없이 고정 너비 유지) */
     .btn-group { 
         display: flex; 
         gap: 6px; 
-        width: 80px; /* 버튼 2개(34px*2 + gap)를 수용할 수 있는 고정 너비 */
+        width: 80px; 
         justify-content: flex-end;
         flex-shrink: 0; 
     }
@@ -84,7 +80,7 @@ st.markdown("""
 
 st.markdown('<div class="main-title">성의교정 주요전화</div>', unsafe_allow_html=True)
 
-# 3. 데이터 로드 (캐시 설정)
+# 3. 데이터 로드
 @st.cache_data(ttl=300)
 def get_live_data():
     URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
@@ -130,39 +126,35 @@ def render_ui(target_df):
         
         display_name = nm if nm else dp
         display_dept = dp if nm else ""
-        
-        # 전화번호 스타일 적용
         display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
         tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
 
-        # HTML 구조 생성 (f-string 가독성 확보)
-        tel_section = f"""
-            <div class="tel-container">
-                {f'<span class="{tel_class}">{display_tel}</span>' if raw_tel else ''}
-                {f'<span class="highlight-hp">{raw_hp}</span>' if raw_hp else ''}
-            </div>
-        """
+        # HTML 가독성을 위해 각 영역을 따로 조립한 후 마지막에 하나로 합침
+        # 전화번호 영역
+        tel_html = f'<div class="tel-container">'
+        if raw_tel: tel_html += f'<span class="{tel_class}">{display_tel}</span>'
+        if raw_hp: tel_html += f'<span class="highlight-hp">{raw_hp}</span>'
+        tel_html += '</div>'
 
+        # 버튼 영역
         dial_tel = get_dial_number(raw_tel)
         t_btn = f'<a href="tel:{dial_tel}" class="c-btn btn-tel">T</a>' if dial_tel else ''
         m_btn = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
-        
-        btn_section = f'<div class="btn-group">{t_btn}{m_btn}</div>'
-        work_section = f'<div class="work-desc">{wk}</div>' if wk else ''
+        btn_html = f'<div class="btn-group">{t_btn}{m_btn}</div>'
 
-        # 전체 아이템 출력 (태그가 깨지지 않도록 한 번에 결합)
+        # 전체 행 조립
         item_html = f"""
-            <div class="contact-item">
-                <div class="info-group">
-                    <div class="name-row">
-                        <span class="name-text">{display_name}</span>
-                        <span class="dept-text">{display_dept}</span>
-                    </div>
-                    {work_section}
+        <div class="contact-item">
+            <div class="info-group">
+                <div class="name-row">
+                    <span class="name-text">{display_name}</span>
+                    <span class="dept-text">{display_dept}</span>
                 </div>
-                {tel_section}
-                {btn_section}
+                {f'<div class="work-desc">{wk}</div>' if wk else ''}
             </div>
+            {tel_html}
+            {btn_html}
+        </div>
         """
         st.markdown(item_html, unsafe_allow_html=True)
 
