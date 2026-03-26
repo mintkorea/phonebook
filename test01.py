@@ -39,7 +39,7 @@ st.markdown("""
 
 st.markdown('<div class="main-title">성의교정 주요전화</div>', unsafe_allow_html=True)
 
-# 3. 데이터 로드 및 [구분] 항목 기준 정렬
+# 3. 데이터 로드 및 [숫자] 기준 정렬
 @st.cache_data(ttl=300)
 def get_live_data():
     URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
@@ -49,14 +49,15 @@ def get_live_data():
         cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
         df.columns = [cols[i] for i in range(min(len(df.columns), len(cols)))]
         
-        # [변경 핵심] 'c_cat'(구분) 컬럼에 ⭐가 있으면 우선순위로 인식
-        df['is_pinned'] = df['c_cat'].str.contains("⭐", na=False).astype(int)
+        # [정렬 로직] c_cat에서 숫자만 추출하여 정렬용 컬럼 생성
+        # 숫자가 없으면 아주 큰 숫자(999)를 부여하여 뒤로 보냄
+        df['sort_order'] = df['c_cat'].apply(lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
         
-        # 화면 표시용 'c_cat'에서 ⭐ 제거 (깔끔하게 카테고리 이름만 남김)
-        df['c_cat'] = df['c_cat'].str.replace("⭐", "", regex=False).str.strip()
+        # 화면 표시용 'c_cat'에서 숫자와 공백 제거
+        df['c_cat_display'] = df['c_cat'].apply(lambda x: re.sub(r'\d+', '', x).strip())
         
-        # 정렬: 우선순위 -> 부서명 -> 이름 순
-        return df.sort_values(by=['is_pinned', 'c_dept', 'c_name'], ascending=[False, True, True])
+        # 정렬: 숫자 순서 -> 부서명 -> 이름 순
+        return df.sort_values(by=['sort_order', 'c_dept', 'c_name'], ascending=[True, True, True])
     except:
         return pd.DataFrame()
 
@@ -114,6 +115,6 @@ for i, tab in enumerate(tabs):
         if category == "전체":
             render_ui(filtered_base)
         else:
-            # 탭 분류 시 c_cat(구분) 또는 c_dept(부서)에 해당 키워드가 있는지 확인
-            tab_final = filtered_base[filtered_base['c_cat'].str.contains(category, na=False) | filtered_base['c_dept'].str.contains(category, na=False)]
+            # 탭 분류 시 숫자가 제거된 'c_cat_display' 또는 'c_dept'를 기준으로 분류
+            tab_final = filtered_base[filtered_base['c_cat_display'].str.contains(category, na=False) | filtered_base['c_dept'].str.contains(category, na=False)]
             render_ui(tab_final)
