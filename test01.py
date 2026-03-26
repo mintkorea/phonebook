@@ -129,34 +129,40 @@ def render_ui(target_df):
         display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
         tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
 
-        # HTML 가독성을 위해 각 영역을 따로 조립한 후 마지막에 하나로 합침
-        # 전화번호 영역
-        tel_html = f'<div class="tel-container">'
-        if raw_tel: tel_html += f'<span class="{tel_class}">{display_tel}</span>'
-        if raw_hp: tel_html += f'<span class="highlight-hp">{raw_hp}</span>'
-        tel_html += '</div>'
+        # 1. 업무 내용 영역 (비어있으면 빈 문자열, 있으면 태그 포함)
+        work_html = f'<div class="work-desc">{wk}</div>' if wk and wk.strip() else ""
 
-        # 버튼 영역
+        # 2. 전화번호 영역 조립
+        tel_inner = ""
+        if raw_tel:
+            tel_inner += f'<span class="{tel_class}">{display_tel}</span>'
+        if raw_hp:
+            tel_inner += f'<span class="highlight-hp">{raw_hp}</span>'
+        tel_html = f'<div class="tel-container">{tel_inner}</div>'
+
+        # 3. 버튼 영역 조립
         dial_tel = get_dial_number(raw_tel)
         t_btn = f'<a href="tel:{dial_tel}" class="c-btn btn-tel">T</a>' if dial_tel else ''
         m_btn = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
         btn_html = f'<div class="btn-group">{t_btn}{m_btn}</div>'
 
-        # 전체 행 조립
-        item_html = f"""
-        <div class="contact-item">
-            <div class="info-group">
-                <div class="name-row">
-                    <span class="name-text">{display_name}</span>
-                    <span class="dept-text">{display_dept}</span>
-                </div>
-                {f'<div class="work-desc">{wk}</div>' if wk else ''}
-            </div>
-            {tel_html}
-            {btn_html}
-        </div>
-        """
-        st.markdown(item_html, unsafe_allow_html=True)
+        # 4. 전체 행 최종 조립 (중첩 중괄호 없이 깔끔하게 합침)
+        final_item_html = (
+            f'<div class="contact-item">'
+            f'    <div class="info-group">'
+            f'        <div class="name-row">'
+            f'            <span class="name-text">{display_name}</span>'
+            f'            <span class="dept-text">{display_dept}</span>'
+            f'        </div>'
+            f'        {work_html}'
+            f'    </div>'
+            f'    {tel_html}'
+            f'    {btn_html}'
+            f'</div>'
+        )
+        
+        st.markdown(final_item_html, unsafe_allow_html=True)
+        
 
 # 7. 실행
 tab_names = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
