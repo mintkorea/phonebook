@@ -1,79 +1,56 @@
-import io
-import csv
+import sys
 
-# 1. 데이터베이스 (CSV 파일을 코드 내부에 포함)
-DATA_STR = """name,campus,building,floor,room,category
-응급실,성의교정,병원,1,,진료
-소아응급실,성의교정,병원,1,,진료
-영상의학과,성의교정,병원,2,,진료
-CT검사실,성의교정,병원,2,,검사
-MRI검사실,성의교정,병원,2,,검사
-카페,성의교정,병원,1,,편의
-카페,성의교정,성의회관,1,,편의
-편의점,성의교정,병원,1,,편의
-전자파실험실,성의교정,옴니버스파크A,8,8128,실험실
-세포배양실,성의교정,옴니버스파크A,8,8135,실험실
-대강의실,성의교정,옴니버스파크C,3,,강의실
-휴게실,성의교정,옴니버스파크C,2,,편의
-장례식장,성의교정,장례식장,1,,시설"""
+# 1. 데이터 리스트 (딕셔너리 형태)
+# 별도의 파일 없이 코드에 직접 포함하여 파일 경로 오류를 방지합니다.
+facilities = [
+    {"name": "응급실", "build": "병원", "floor": "1", "room": "", "cat": "진료"},
+    {"name": "소아응급실", "build": "병원", "floor": "1", "room": "", "cat": "진료"},
+    {"name": "영상의학과", "build": "병원", "floor": "2", "room": "", "cat": "진료"},
+    {"name": "CT검사실", "build": "병원", "floor": "2", "room": "", "cat": "검사"},
+    {"name": "MRI검사실", "build": "병원", "floor": "2", "room": "", "cat": "검사"},
+    {"name": "카페", "build": "병원", "floor": "1", "room": "", "cat": "편의"},
+    {"name": "카페", "build": "성의회관", "floor": "1", "room": "", "cat": "편의"},
+    {"name": "편의점", "build": "병원", "floor": "1", "room": "", "cat": "편의"},
+    {"name": "전자파실험실", "build": "옴니버스파크A", "floor": "8", "room": "8128", "cat": "실험실"},
+    {"name": "세포배양실", "build": "옴니버스파크A", "floor": "8", "room": "8135", "cat": "실험실"},
+    {"name": "대강의실", "build": "옴니버스파크C", "floor": "3", "room": "", "cat": "강의실"},
+    {"name": "휴게실", "build": "옴니버스파크C", "floor": "2", "room": "", "cat": "편의"},
+    {"name": "장례식장", "build": "장례식장", "floor": "1", "room": "", "cat": "시설"},
+]
 
-def get_data():
-    """문자열 데이터를 리스트로 변환"""
-    data = []
-    f = io.StringIO(DATA_STR.strip())
-    reader = csv.DictReader(f)
-    for i, row in enumerate(reader):
-        row['id'] = i + 1
-        # 검색용 별칭 (이름에서 '실' 제거 버전 포함)
-        row['alias'] = [row['name'], row['name'].replace("실", ""), row['name'].lower()]
-        data.append(row)
-    return data
+print("-" * 40)
+print("▶ 시스템 시작됨 (이 문구가 보이나요?)")
+print("-" * 40)
 
-def main():
-    try:
-        facilities = get_data()
-        
-        print("="*45)
-        print("   🏥 성의교정 스마트 건물 안내 시스템")
-        print("        (종료하려면 'q'를 입력하세요)")
-        print("="*45)
+while True:
+    # 사용자 입력 받기
+    print("\n[안내] 찾으시는 시설명을 입력하세요. (종료: q)")
+    user_input = input(">> 검색어: ").strip()
 
-        while True:
-            print("\n" + "·"*45)
-            query = input("📍 찾으시는 시설이나 건물을 입력하세요: ").strip()
+    # 종료 조건
+    if user_input.lower() == 'q':
+        print("프로그램을 종료합니다.")
+        break
 
-            if query.lower() in ['q', 'exit', '종료']:
-                print("\n👋 시스템을 종료합니다. 안녕히 가십시오.")
-                break
+    if not user_input:
+        print("검색어를 입력해 주세요.")
+        continue
 
-            if not query:
-                continue
-
-            # 검색 로직 (이름, 별칭, 건물명 통합 검색)
-            results = []
-            for item in facilities:
-                if any(query.lower() in a.lower() for a in item['alias']) or query in item['building']:
-                    results.append(item)
-
-            # 결과 출력
-            if results:
-                print(f"\n✨ '{query}' 검색 결과 ({len(results)}건):")
-                print("-" * 45)
-                for res in results:
-                    # 호수 정보가 있으면 표시
-                    room_info = f" [{res['room']}호]" if res['room'] else ""
-                    print(f"[{res['category']}] {res['name']}")
-                    print(f" 🚩 위치: {res['building']} {res['floor']}층{room_info}")
-                    print("-" * 20)
-            else:
-                print(f"\n❌ '{query}'에 대한 정보를 찾을 수 없습니다.")
-                print("Tip: '카페', '응급실', '옴니버스' 등으로 검색해 보세요.")
-
-    except Exception as e:
-        print(f"\n⚠️ 시스템 오류 발생: {e}")
+    # 검색 수행
+    found_count = 0
+    print(f"\n--- '{user_input}' 검색 결과 ---")
     
-    # 프로그램이 바로 닫히지 않도록 대기
-    input("\n[엔터키를 누르면 창이 닫힙니다]")
+    for f in facilities:
+        # 이름이나 건물명에 검색어가 포함되어 있는지 확인
+        if user_input in f['name'] or user_input in f['build']:
+            room_str = f"({f['room']}호)" if f['room'] else ""
+            print(f"[{f['cat']}] {f['name']}")
+            print(f"   위치: {f['build']} {f['floor']}층 {room_str}")
+            print("-" * 30)
+            found_count += 1
 
-if __name__ == "__main__":
-    main()
+    if found_count == 0:
+        print("검색 결과가 없습니다. 다시 입력해 보세요.")
+
+# 프로그램이 갑자기 꺼지는 것을 방지하기 위해 마지막에 대기
+input("\n엔터를 누르면 완전히 종료됩니다.")
