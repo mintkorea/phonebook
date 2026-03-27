@@ -1,7 +1,8 @@
 import csv
 import io
+import time
 
-# ---------- 데이터 (CSV 형식) ----------
+# 1. 데이터 정의
 CSV_DATA = """name,campus,building,floor,room,category
 응급실,성의교정,병원,1,,진료
 소아응급실,성의교정,병원,1,,진료
@@ -17,95 +18,49 @@ MRI검사실,성의교정,병원,2,,검사
 휴게실,성의교정,옴니버스파크C,2,,편의
 장례식장,성의교정,장례식장,1,,시설"""
 
-# ---------- 로직 함수 ----------
-
-def make_aliases(name):
-    """검색 성능을 위해 별칭 생성 (실 제외, 소문자화 등)"""
-    return list(set([
-        name,
-        name.replace("실", ""),
-        name.lower()
-    ]))
-
-def load_data_from_string(csv_text):
-    """텍스트 데이터를 파싱하여 리스트로 반환"""
-    data = []
-    # io.StringIO를 사용하여 문자열을 파일처럼 읽음
-    f = io.StringIO(csv_text.strip())
-    reader = csv.DictReader(f)
-
-    for i, row in enumerate(reader):
-        data.append({
-            "id": i + 1,
-            "name": row["name"],
-            "aliases": make_aliases(row["name"]),
-            "campus": row["campus"],
-            "building": row["building"],
-            "floor": int(row["floor"]) if row["floor"] else 0,
-            "room": row["room"] if row["room"] else None,
-            "category": row["category"]
-        })
-    return data
-
-def search(query, data, category="ALL"):
-    """검색어와 데이터를 비교하여 결과 반환"""
-    query = query.lower().strip()
-    if not query:
-        return []
+def run_app():
+    try:
+        print("========================================")
+        print(" 시스템을 초기화 중입니다...")
+        time.sleep(0.5) # 로딩되는 느낌을 주기 위한 지연
         
-    results = []
+        # 데이터 로드
+        data = []
+        f = io.StringIO(CSV_DATA.strip())
+        reader = csv.DictReader(f)
+        for row in reader:
+            data.append(row)
+        
+        print(f" ✅ {len(data)}개의 데이터를 성공적으로 불러왔습니다.")
+        print(" 'exit'를 입력하면 프로그램이 종료됩니다.")
+        print("========================================\n")
 
-    for item in data:
-        score = 0
-        # 1. 이름에 포함된 경우 (가장 높은 점수)
-        if query in item["name"].lower():
-            score += 3
-        # 2. 별칭에 포함된 경우
-        elif any(query in a.lower() for a in item["aliases"]):
-            score += 2
-        # 3. 건물명에 포함된 경우
-        elif query in item["building"].lower():
-            score += 1
+        while True:
+            query = input("🔍 검색어를 입력하세요: ").strip()
 
-        # 카테고리 필터링
-        if category != "ALL" and item["category"] != category:
-            continue
+            if not query:
+                continue
 
-        if score > 0:
-            results.append((score, item))
+            if query.lower() in ['exit', 'quit', '종료', 'q']:
+                print("\n프로그램을 종료합니다. 이용해 주셔서 감사합니다.")
+                time.sleep(1)
+                break
 
-    # 점수 높은 순으로 정렬
-    results.sort(reverse=True, key=lambda x: x[0])
-    return [r[1] for r in results]
+            # 검색 로직
+            results = [item for item in data if query in item['name']]
 
-# ---------- 실행 UI ----------
+            if results:
+                print(f"\n[검색 결과: {len(results)}건]")
+                for res in results:
+                    room = f"({res['room']}호)" if res['room'] else ""
+                    print(f" - {res['name']} | {res['building']} {res['floor']}층 {room} [{res['category']}]")
+                print("-" * 40)
+            else:
+                print(f" ❌ '{query}'에 대한 검색 결과가 없습니다.\n")
 
-def run():
-    # 데이터 로드
-    data = load_data_from_string(CSV_DATA)
-
-    print("🏥 성의교정 시설 검색 시스템")
-    print("👉 '검색어'를 입력하세요. (종료: exit 또는 q)\n")
-
-    while True:
-        query = input("🔍 검색어: ").strip()
-
-        if query.lower() in ["exit", "q", "ㅂㅂ"]:
-            print("프로그램을 종료합니다.")
-            break
-
-        results = search(query, data)
-
-        if not results:
-            print("❌ 검색 결과가 없습니다.\n")
-            continue
-
-        print(f"\n✅ {len(results)}개의 결과를 찾았습니다:")
-        for item in results:
-            room_info = f" ({item['room']}호)" if item["room"] else ""
-            print(f"[{item['category']}] {item['name']}")
-            print(f"   📍 위치: {item['building']} {item['floor']}층{room_info}")
-        print("-" * 30)
+    except Exception as e:
+        print(f"‼️ 실행 중 오류가 발생했습니다: {e}")
+        input("오류 내용을 확인하신 후 엔터를 눌러주세요...")
 
 if __name__ == "__main__":
-    run()
+    run_app()
