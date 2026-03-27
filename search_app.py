@@ -1,9 +1,8 @@
-import csv
 import io
-import time
+import csv
 
-# 1. 데이터 정의
-CSV_DATA = """name,campus,building,floor,room,category
+# 1. 데이터베이스 (CSV 파일을 코드 내부에 포함)
+DATA_STR = """name,campus,building,floor,room,category
 응급실,성의교정,병원,1,,진료
 소아응급실,성의교정,병원,1,,진료
 영상의학과,성의교정,병원,2,,진료
@@ -18,49 +17,63 @@ MRI검사실,성의교정,병원,2,,검사
 휴게실,성의교정,옴니버스파크C,2,,편의
 장례식장,성의교정,장례식장,1,,시설"""
 
-def run_app():
+def get_data():
+    """문자열 데이터를 리스트로 변환"""
+    data = []
+    f = io.StringIO(DATA_STR.strip())
+    reader = csv.DictReader(f)
+    for i, row in enumerate(reader):
+        row['id'] = i + 1
+        # 검색용 별칭 (이름에서 '실' 제거 버전 포함)
+        row['alias'] = [row['name'], row['name'].replace("실", ""), row['name'].lower()]
+        data.append(row)
+    return data
+
+def main():
     try:
-        print("========================================")
-        print(" 시스템을 초기화 중입니다...")
-        time.sleep(0.5) # 로딩되는 느낌을 주기 위한 지연
+        facilities = get_data()
         
-        # 데이터 로드
-        data = []
-        f = io.StringIO(CSV_DATA.strip())
-        reader = csv.DictReader(f)
-        for row in reader:
-            data.append(row)
-        
-        print(f" ✅ {len(data)}개의 데이터를 성공적으로 불러왔습니다.")
-        print(" 'exit'를 입력하면 프로그램이 종료됩니다.")
-        print("========================================\n")
+        print("="*45)
+        print("   🏥 성의교정 스마트 건물 안내 시스템")
+        print("        (종료하려면 'q'를 입력하세요)")
+        print("="*45)
 
         while True:
-            query = input("🔍 검색어를 입력하세요: ").strip()
+            print("\n" + "·"*45)
+            query = input("📍 찾으시는 시설이나 건물을 입력하세요: ").strip()
+
+            if query.lower() in ['q', 'exit', '종료']:
+                print("\n👋 시스템을 종료합니다. 안녕히 가십시오.")
+                break
 
             if not query:
                 continue
 
-            if query.lower() in ['exit', 'quit', '종료', 'q']:
-                print("\n프로그램을 종료합니다. 이용해 주셔서 감사합니다.")
-                time.sleep(1)
-                break
+            # 검색 로직 (이름, 별칭, 건물명 통합 검색)
+            results = []
+            for item in facilities:
+                if any(query.lower() in a.lower() for a in item['alias']) or query in item['building']:
+                    results.append(item)
 
-            # 검색 로직
-            results = [item for item in data if query in item['name']]
-
+            # 결과 출력
             if results:
-                print(f"\n[검색 결과: {len(results)}건]")
+                print(f"\n✨ '{query}' 검색 결과 ({len(results)}건):")
+                print("-" * 45)
                 for res in results:
-                    room = f"({res['room']}호)" if res['room'] else ""
-                    print(f" - {res['name']} | {res['building']} {res['floor']}층 {room} [{res['category']}]")
-                print("-" * 40)
+                    # 호수 정보가 있으면 표시
+                    room_info = f" [{res['room']}호]" if res['room'] else ""
+                    print(f"[{res['category']}] {res['name']}")
+                    print(f" 🚩 위치: {res['building']} {res['floor']}층{room_info}")
+                    print("-" * 20)
             else:
-                print(f" ❌ '{query}'에 대한 검색 결과가 없습니다.\n")
+                print(f"\n❌ '{query}'에 대한 정보를 찾을 수 없습니다.")
+                print("Tip: '카페', '응급실', '옴니버스' 등으로 검색해 보세요.")
 
     except Exception as e:
-        print(f"‼️ 실행 중 오류가 발생했습니다: {e}")
-        input("오류 내용을 확인하신 후 엔터를 눌러주세요...")
+        print(f"\n⚠️ 시스템 오류 발생: {e}")
+    
+    # 프로그램이 바로 닫히지 않도록 대기
+    input("\n[엔터키를 누르면 창이 닫힙니다]")
 
 if __name__ == "__main__":
-    run_app()
+    main()
