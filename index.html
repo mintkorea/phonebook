@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>시설 검색</title>
+<style>
+body { font-family: Arial; padding: 20px; }
+input { width: 100%; padding: 10px; }
+.card { margin-top: 10px; padding: 10px; border: 1px solid #ddd; }
+</style>
+</head>
+<body>
+
+<h2>🔍 시설 검색</h2>
+<input id="q" placeholder="검색..." />
+<div id="results"></div>
+
+<script>
+async function search(q) {
+  const res = await fetch(`http://127.0.0.1:8000/search?q=${q}`);
+  const data = await res.json();
+
+  const el = document.getElementById("results");
+  el.innerHTML = "";
+
+  data.forEach(item => {
+    el.innerHTML += `
+      <div class="card">
+        <b>${item.name}</b><br/>
+        📍 ${item.building} ${item.floor}층
+      </div>
+    `;
+  });
+}
+
+document.getElementById("q")
+  .addEventListener("input", e => search(e.target.value));
+</script>
+
+</body>
+</html>
