@@ -1,41 +1,176 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>시설 검색</title>
-<style>
-body { font-family: Arial; padding: 20px; }
-input { width: 100%; padding: 10px; }
-.card { margin-top: 10px; padding: 10px; border: 1px solid #ddd; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>성의교정 통합 지원포털</title>
+    <script src="https://unpkg.com/hangul-js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+    <style>
+        :root { --primary: #1e3a8a; --secondary: #64748b; --bg: #f8fafc; }
+        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg); margin: 0; padding: 0; color: #0f172a; }
+        .container { max-width: 500px; margin: 0 auto; background: white; min-height: 100vh; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+        
+        /* 탭 디자인 */
+        .tabs { display: flex; border-bottom: 2px solid #e2e8f0; sticky; top: 0; background: white; z-index: 10; }
+        .tab { flex: 1; text-align: center; padding: 15px; cursor: pointer; font-weight: bold; color: var(--secondary); transition: 0.2s; }
+        .tab.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: #f0f4ff; }
+
+        .content { padding: 15px; }
+        .search-box { width: 100%; padding: 14px; border: 1px solid #e2e8f0; border-radius: 10px; box-sizing: border-box; margin-bottom: 15px; font-size: 16px; outline: none; }
+        .search-box:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30,58,138,0.1); }
+
+        /* 전화번호 아이템 */
+        .phone-item { border-bottom: 1px solid #f1f5f9; padding: 12px 0; display: flex; flex-direction: column; }
+        .top-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .name-area { font-size: 16px; font-weight: 800; color: #1e293b; min-width: 100px; }
+        .num-area { flex: 1; text-align: right; font-size: 15px; font-weight: 700; color: #475569; }
+        .special-navy { color: var(--primary) !important; font-style: italic; }
+        .icon-group { display: flex; gap: 6px; }
+        .btn-icon { text-decoration: none; background: #f1f5f9; color: #475569; width: 34px; height: 34px; 
+                    display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 800; font-size: 12px; border: 1px solid #e2e8f0; }
+        .btn-m { background: #ecfdf5; color: #059669; border-color: #d1fae5; }
+        .work-text { font-size: 12px; color: #10b981; font-weight: 600; margin-top: 4px; line-height: 1.4; }
+        .cat-tag { font-size: 10px; color: #94a3b8; margin-bottom: 2px; }
+
+        /* 대관 디자인 */
+        .date-input-group { display: flex; gap: 8px; margin-bottom: 20px; }
+        .building-header { font-size: 17px; font-weight: 800; color: #2e5077; margin: 25px 0 10px 0; border-bottom: 2px solid #2e5077; padding-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+        .event-card { border: 1px solid #e2e8f0; border-left: 5px solid #2e5077; padding: 14px; border-radius: 8px; margin-bottom: 12px; background: white; position: relative; }
+        .status-badge { position: absolute; top: 12px; right: 12px; padding: 3px 8px; font-size: 11px; border-radius: 6px; font-weight: bold; }
+        .status-y { background: #fff4e5; color: #b25e09; }
+        .status-n { background: #e8f0fe; color: #1967D2; }
+
+        .no-data { text-align: center; padding: 30px; color: #94a3b8; font-size: 14px; }
+    </style>
 </head>
 <body>
 
-<h2>🔍 시설 검색</h2>
-<input id="q" placeholder="검색..." />
-<div id="results"></div>
+<div class="container">
+    <div class="tabs">
+        <div class="tab active" id="tab-btn-tel" onclick="switchTab('tel')">📞 전화번호부</div>
+        <div class="tab" id="tab-btn-rent" onclick="switchTab('rent')">📱 모바일 대관</div>
+    </div>
+
+    <div class="content">
+        <div id="section-tel">
+            <input type="text" id="phoneSearch" class="search-box" placeholder="성함, 부서, 업무, 초성 검색..." oninput="filterPhones()">
+            <div id="phoneList"></div>
+        </div>
+
+        <div id="section-rent" style="display:none;">
+            <div class="date-input-group">
+                <input type="date" id="rentDate" class="search-box" style="margin-bottom:0;">
+                <button onclick="renderRental()" style="background:var(--primary); color:white; border:none; border-radius:10px; padding:0 20px; font-weight:bold;">조회</button>
+            </div>
+            <div id="rentalList"></div>
+        </div>
+    </div>
+</div>
 
 <script>
-async function search(q) {
-  const res = await fetch(`http://127.0.0.1:8000/search?q=${q}`);
-  const data = await res.json();
+    // [1] 데이터 정의
+    // 전화번호 데이터 (업로드해주신 파일 반영)
+    const phoneData = [
+        {cat: "🚨 긴급/조치", dept: "전기팀", name: "", tel: "02-2258-5672", hp: "", work: "전기/누수(대량/소방)/저온실(공동)"},
+        {cat: "🚨 긴급/조치", dept: "설비팀", name: "", tel: "02-2258-5624", hp: "", work: "개별 냉방기/누수/변기막힘/기자재(냉동고/인큐베이터/저온실)"},
+        {cat: "🚨 긴급/조치", dept: "통합관제", name: "", tel: "02-2258-5555", hp: "", work: "중앙 공조기/유도등/자동문/장애인화장실/소방누수"},
+        {cat: "🚨 긴급/조치", dept: "반송통제실", name: "", tel: "02-2258-5616", hp: "", work: "주간 승강기(EV) 고장 대응"},
+        {cat: "🚨 긴급/조치", dept: "FMLG", name: "", tel: "1899-7144", hp: "", work: "야간 승강기(EV) 고장 대응"},
+        {cat: "🚨 긴급/조치", dept: "본관안전상황실", name: "", tel: "02-2258-1112", hp: "", work: "보안 및 안전 상황실 총괄"},
+        {cat: "🏢 행정/총무", dept: "비서실", name: "심지연", tel: "02-3147-8068", hp: "010-3445-0623", work: "영성구현실장, 사무처장 비서"},
+        {cat: "🏢 행정/총무", dept: "비서실", name: "박은영", tel: "02-3147-8069", hp: "010-5348-6849", work: "의과대학장 비서"},
+        {cat: "🏢 행정/총무", dept: "사무처장", name: "", tel: "02-3147-8061", hp: "", work: "사무처 행정 총괄"},
+        {cat: "🏢 행정/총무", dept: "영선팀", name: "", tel: "02-2258-5605", hp: "", work: "영선 업무 및 시설물 수리"},
+        {cat: "🔒 보안/출입", dept: "보안실", name: "이용춘", tel: "02-3147-8300", hp: "010-6213-8502", work: "보안 총괄/일반문/의자/천장텍스 수리 접수"},
+        {cat: "🔒 보안/출입", dept: "주차관리", name: "", tel: "02-2258-6000", hp: "", work: "교내 주차 민원 및 관리"},
+        {cat: "🔒 보안/출입", dept: "셔틀버스", name: "", tel: "02-2258-6451", hp: "", work: "교내 셔틀버스 운행 및 관리"},
+        {cat: "🔒 보안/출입", dept: "에스텍시스템", name: "", tel: "02-2142-8292", hp: "", work: "외부 보안 관리 (FAX 2142-8318)"}
+    ];
 
-  const el = document.getElementById("results");
-  el.innerHTML = "";
+    // 대관 데이터 (샘플 데이터 - 1주일에 한 번씩 CSV 내용을 이 배열에 업데이트하시면 됩니다)
+    const rentalData = [
+        {date: "2026-04-01", buNm: "성의회관", placeNm: "마리아홀", startTime: "09:00", endTime: "12:00", eventNm: "의학 학술대회", status: "Y"},
+        {date: "2026-04-01", buNm: "옴니버스 파크", placeNm: "L001호", startTime: "13:00", endTime: "15:00", eventNm: "신입생 오리엔테이션", status: "N"}
+    ];
 
-  data.forEach(item => {
-    el.innerHTML += `
-      <div class="card">
-        <b>${item.name}</b><br/>
-        📍 ${item.building} ${item.floor}층
-      </div>
-    `;
-  });
-}
+    // [2] 탭 전환
+    function switchTab(type) {
+        document.getElementById('section-tel').style.display = type === 'tel' ? 'block' : 'none';
+        document.getElementById('section-rent').style.display = type === 'rent' ? 'block' : 'none';
+        document.getElementById('tab-btn-tel').className = 'tab ' + (type === 'tel' ? 'active' : '');
+        document.getElementById('tab-btn-rent').className = 'tab ' + (type === 'rent' ? 'active' : '');
+    }
 
-document.getElementById("q")
-  .addEventListener("input", e => search(e.target.value));
+    // [3] 전화번호 검색 및 렌더링 (초성 지원)
+    function filterPhones() {
+        const query = document.getElementById('phoneSearch').value;
+        const list = document.getElementById('phoneList');
+        list.innerHTML = '';
+
+        const filtered = phoneData.filter(item => {
+            const target = (item.name + item.dept + item.work + item.cat).replace(/\s/g, "");
+            return Hangul.search(target, query.replace(/\s/g, "")) >= 0;
+        });
+
+        filtered.forEach(r => {
+            const cleanTel = r.tel.replace(/[^0-9]/g, "");
+            const cleanHp = r.hp.replace(/[^0-9]/g, "");
+            const dispNum = r.tel.replace("02-2258-", "").replace("02-3147-", "");
+            
+            const html = `
+                <div class="phone-item">
+                    <div class="cat-tag">${r.cat} | ${r.dept}</div>
+                    <div class="top-line">
+                        <div class="name-area">${r.name || r.dept}</div>
+                        <div class="num-area ${r.tel.includes('2258') ? 'special-navy' : ''}">${dispNum}</div>
+                        <div class="icon-group">
+                            <a href="tel:${cleanTel}" class="btn-icon">T</a>
+                            ${r.hp ? `<a href="tel:${cleanHp}" class="btn-icon btn-m">M</a>` : ''}
+                        </div>
+                    </div>
+                    <div class="work-text">${r.work}</div>
+                </div>`;
+            list.insertAdjacentHTML('beforeend', html);
+        });
+    }
+
+    // [4] 대관 내역 렌더링
+    function renderRental() {
+        const targetDate = document.getElementById('rentDate').value;
+        const list = document.getElementById('rentalList');
+        list.innerHTML = '';
+
+        const buildings = ["성의회관", "의생명산업연구원", "옴니버스 파크"];
+        
+        buildings.forEach(bu => {
+            list.insertAdjacentHTML('beforeend', `<div class="building-header">🏢 ${bu}</div>`);
+            const daily = rentalData.filter(d => d.date === targetDate && d.buNm.includes(bu));
+            
+            if (daily.length === 0) {
+                list.insertAdjacentHTML('beforeend', `<div class="no-data">해당 날짜에 내역이 없습니다.</div>`);
+            } else {
+                daily.forEach(ev => {
+                    const statusClass = ev.status === 'Y' ? 'status-y' : 'status-n';
+                    const statusText = ev.status === 'Y' ? '확정' : '대기';
+                    list.insertAdjacentHTML('beforeend', `
+                        <div class="event-card">
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                            <div style="font-weight:bold; color:#1e293b; margin-bottom:5px;">📍 ${ev.placeNm}</div>
+                            <div style="font-size:13px; color:#64748b;">⏰ ${ev.startTime} ~ ${ev.endTime}</div>
+                            <div style="font-size:14px; margin-top:8px; color:#334155;">📄 ${ev.eventNm}</div>
+                        </div>`);
+                });
+            }
+        });
+    }
+
+    // 초기 설정
+    window.onload = () => {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('rentDate').value = today;
+        filterPhones();
+    };
 </script>
 
 </body>
