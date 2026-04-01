@@ -8,76 +8,80 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
     <style>
         :root { --primary: #1e3a8a; --bg: #f8fafc; --border: #e2e8f0; }
-        body { font-family: 'Pretendard', sans-serif; background: var(--bg); margin: 0; color: #0f172a; line-height: 1.5; }
-        .container { max-width: 800px; margin: 0 auto; background: white; min-height: 100vh; }
+        body { font-family: 'Pretendard', sans-serif; background: var(--bg); margin: 0; color: #0f172a; -webkit-tap-highlight-color: transparent; }
+        .container { max-width: 800px; margin: 0 auto; background: white; min-height: 100vh; display: flex; flex-direction: column; }
 
-        /* 메인 탭 */
+        /* 메인 상단 탭 */
         .main-tabs { display: flex; background: #fff; border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 100; }
-        .m-tab { flex: 1; text-align: center; padding: 15px; cursor: pointer; font-weight: 800; color: #64748b; }
-        .m-tab.active { color: var(--primary); border-bottom: 3px solid var(--primary); }
+        .m-tab { flex: 1; text-align: center; padding: 16px; cursor: pointer; font-weight: 800; color: #64748b; font-size: 16px; }
+        .m-tab.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: #f8faff; }
 
-        /* 서브 카테고리 탭 (전화번호부용) */
-        .sub-tabs { display: flex; overflow-x: auto; padding: 10px; gap: 8px; background: #fff; border-bottom: 1px solid var(--border); }
+        /* 전화번호부 서브 카테고리 (가로 스크롤) */
+        .sub-tabs { display: flex; overflow-x: auto; padding: 12px; gap: 8px; background: #fff; border-bottom: 1px solid var(--border); white-space: nowrap; -webkit-overflow-scrolling: touch; }
         .sub-tabs::-webkit-scrollbar { display: none; }
-        .s-tab { white-space: nowrap; padding: 6px 14px; background: #f1f5f9; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); }
-        .s-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .s-tab { padding: 8px 16px; background: #f1f5f9; border-radius: 20px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; }
+        .s-tab.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 2px 4px rgba(30,58,138,0.2); }
 
-        .content { padding: 15px; }
-        .search-box { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; font-size: 16px; }
+        .content { padding: 15px; flex: 1; }
+        .search-box { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 15px; box-sizing: border-box; font-size: 16px; outline: none; background: #f9fbff; }
+        .search-box:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(30,58,138,0.1); }
 
-        /* [전화번호 아이템] */
-        .phone-item { border-bottom: 1px solid #f1f5f9; padding: 12px 0; display: flex; flex-direction: column; }
+        /* [전화번호 리스트 스타일] */
+        .phone-item { border-bottom: 1px solid #f1f5f9; padding: 14px 0; }
         .top-line { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-        .name-area { width: 140px; font-weight: 800; font-size: 15px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .num-area { flex: 1; text-align: right; padding-right: 10px; font-weight: 700; color: #334155; font-size: 14px; }
-        .icon-area { width: 75px; min-width: 75px; display: flex; justify-content: flex-end; gap: 5px; } /* 영역 고정 */
-        .btn-icon { text-decoration: none; background: #f8fafc; color: #475569; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-weight: 800; font-size: 11px; border: 1px solid var(--border); }
-        .btn-m { background: #ecfdf5; color: #059669; border-color: #d1fae5; }
-        .work-text { font-size: 12px; color: #10b981; font-weight: 600; margin-top: 4px; }
-
-        /* [대관 디자인] */
-        .view-controls { display: flex; justify-content: flex-end; gap: 5px; margin-bottom: 10px; }
-        .v-btn { padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; background: #fff; }
-        .v-btn.active { background: #334155; color: white; }
-
-        .building-header { font-size: 17px; font-weight: 800; color: #2e5077; margin: 20px 0 10px; border-left: 4px solid #2e5077; padding-left: 10px; }
+        .name-area { width: 130px; font-weight: 800; font-size: 15px; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .num-area { flex: 1; text-align: right; padding-right: 12px; font-weight: 700; color: #475569; font-size: 14px; letter-spacing: -0.02em; }
+        .special-navy { color: var(--primary) !important; font-style: italic !important; font-weight: 800 !important; }
         
-        /* 대관 카드형 (모바일 최적화) */
-        .res-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: white; position: relative; }
-        .badge { position: absolute; top: 12px; right: 12px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        /* 아이콘 영역 고정 (60px ~ 70px 보장) */
+        .icon-area { width: 72px; min-width: 72px; display: flex; justify-content: flex-end; gap: 6px; flex-shrink: 0; }
+        .btn-icon { text-decoration: none; background: #f8fafc; color: #475569; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 800; font-size: 11px; border: 1px solid var(--border); }
+        .btn-m { background: #ecfdf5; color: #059669; border-color: #d1fae5; }
+        .work-text { font-size: 12px; color: #10b981; font-weight: 600; margin-top: 5px; line-height: 1.4; word-break: keep-all; }
+
+        /* [대관 섹션 스타일] */
+        .building-header { font-size: 18px; font-weight: 800; color: #2e5077; margin: 25px 0 12px; border-bottom: 2px solid #2e5077; padding-bottom: 6px; }
+        .view-controls { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 12px; }
+        .v-btn { padding: 6px 12px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border); background: #fff; font-weight: 700; color: #64748b; cursor: pointer; }
+        .v-btn.active { background: #334155; color: white; border-color: #334155; }
+
+        /* 대관 카드형 */
+        .res-card { border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 12px; background: white; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .badge { position: absolute; top: 15px; right: 15px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; }
         .badge-y { background: #fff4e5; color: #b25e09; }
         .badge-n { background: #e8f0fe; color: #1967d2; }
 
-        /* 대관 리스트형 (PC 최적화) */
-        .res-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
-        .res-table th { background: #f1f5f9; padding: 10px; text-align: left; border-bottom: 2px solid var(--border); }
-        .res-table td { padding: 10px; border-bottom: 1px solid var(--border); }
+        /* 대관 리스트형 (테이블) */
+        .res-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; table-layout: fixed; }
+        .res-table th { background: #f8fafc; padding: 12px 8px; text-align: left; border-bottom: 2px solid var(--border); color: #64748b; }
+        .res-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; word-break: break-all; }
 
+        .no-data { text-align: center; padding: 40px 0; color: #94a3b8; font-size: 14px; }
+        
         @media (max-width: 600px) { .pc-only { display: none; } }
-        @media (min-width: 601px) { .mo-only { display: none; } }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="main-tabs">
-        <div class="m-tab active" onclick="switchMainTab('tel')">📞 전화번호부</div>
-        <div class="m-tab" onclick="switchMainTab('rent')">📱 모바일 대관</div>
+        <div class="m-tab active" id="m-btn-tel" onclick="switchMainTab('tel')">📞 전화번호부</div>
+        <div class="m-tab" id="m-btn-rent" onclick="switchMainTab('rent')">📱 모바일 대관</div>
     </div>
 
     <div id="sec-tel">
         <div class="sub-tabs" id="subTabs"></div>
         <div class="content">
-            <input type="text" id="phoneSearch" class="search-box" placeholder="성함, 부서, 업무, 초성 검색..." oninput="filterPhones()">
+            <input type="text" id="phoneSearch" class="search-box" placeholder="부서, 성함, 초성 검색..." oninput="filterPhones()">
             <div id="phoneList"></div>
         </div>
     </div>
 
     <div id="sec-rent" style="display:none;">
         <div class="content">
-            <div style="display:flex; gap:10px; margin-bottom:15px;">
-                <input type="date" id="rentDate" class="search-box" style="margin:0;">
-                <button onclick="renderRental()" style="background:var(--primary); color:white; border:none; border-radius:8px; padding:0 20px; font-weight:800;">조회</button>
+            <div style="display:flex; gap:8px; margin-bottom:15px;">
+                <input type="date" id="rentDate" class="search-box" style="margin:0; flex:1;">
+                <button onclick="renderRental()" style="background:var(--primary); color:white; border:none; border-radius:12px; padding:0 20px; font-weight:800; cursor:pointer;">조회</button>
             </div>
             <div class="view-controls">
                 <button class="v-btn active" id="btn-card" onclick="setView('card')">카드형</button>
@@ -89,64 +93,76 @@
 </div>
 
 <script>
-    // [데이터] 
+    // [1] 데이터 로드 (사용자 제공 CSV 기반 매핑)
     const phoneData = [
         {cat: "🚨 긴급/조치", dept: "전기팀", name: "", tel: "02-2258-5672", hp: "", work: "전기/누수(대량/소방)/저온실(공동)"},
         {cat: "🚨 긴급/조치", dept: "설비팀", name: "", tel: "02-2258-5624", hp: "", work: "개별 냉방기/누수/변기막힘/기자재"},
-        {cat: "🚨 긴급/조치", dept: "통합관제", name: "", tel: "02-2258-5555", hp: "", work: "중앙 공조기/자동문/소방누수"},
+        {cat: "🚨 긴급/조치", dept: "통합관제", name: "", tel: "02-2258-5555", hp: "", work: "중앙 공조기/유도등/자동문/소방누수"},
+        {cat: "🚨 긴급/조치", dept: "반송통제실", name: "", tel: "02-2258-5616", hp: "", work: "주간 승강기(EV) 고장 대응"},
+        {cat: "🚨 긴급/조치", dept: "FMLG", name: "", tel: "1899-7144", hp: "", work: "야간 승강기(EV) 고장 대응"},
+        {cat: "🚨 긴급/조치", dept: "본관안전상황실", name: "", tel: "02-2258-1112", hp: "", work: "보안 및 안전 상황실 총괄"},
         {cat: "🏢 행정/총무", dept: "비서실", name: "심지연", tel: "02-3147-8068", hp: "010-3445-0623", work: "사무처장 비서"},
+        {cat: "🏢 행정/총무", dept: "비서실", name: "박은영", tel: "02-3147-8069", hp: "010-5348-6849", work: "의과대학장 비서"},
         {cat: "🏢 행정/총무", dept: "영선팀", name: "", tel: "02-2258-5605", hp: "", work: "영선 업무 및 시설물 수리"},
         {cat: "🔒 보안/출입", dept: "보안실", name: "이용춘", tel: "02-3147-8300", hp: "010-6213-8502", work: "보안 총괄/수리 접수"},
-        {cat: "🔒 보안/출입", dept: "셔틀버스", name: "", tel: "02-2258-6451", hp: "", work: "셔틀버스 운행 및 관리"}
+        {cat: "🔒 보안/출입", dept: "주차관리", name: "", tel: "02-2258-6000", hp: "", work: "교내 주차 민원 및 관리"},
+        {cat: "🔒 보안/출입", dept: "셔틀버스", name: "", tel: "02-2258-6451", hp: "", work: "교내 셔틀버스 운행 및 관리"},
+        {cat: "💻 IT/지원", dept: "정보지원팀", name: "", tel: "02-2258-7640", hp: "", work: "PC수리/네트워크/전화 가입 및 장애"}
     ];
 
-    const rentalData = [
-        {date: "2026-04-01", buNm: "성의회관", placeNm: "마리아홀", startTime: "09:00", endTime: "12:00", eventNm: "의학 세미나", status: "Y"},
-        {date: "2026-04-01", buNm: "옴니버스 파크", placeNm: "L001호", startTime: "14:00", endTime: "17:00", eventNm: "기획회의", status: "N"}
-    ];
+    const rentalData = []; // 여기에 주간 대관 데이터를 넣으시면 됩니다.
 
-    let currentCat = "전체";
+    let currentMain = 'tel';
+    let currentCat = '전체';
     let currentView = window.innerWidth > 600 ? 'list' : 'card';
 
-    // [기능: 메인 탭]
+    // [2] 메인 탭 전환
     function switchMainTab(type) {
+        currentMain = type;
         document.getElementById('sec-tel').style.display = type === 'tel' ? 'block' : 'none';
         document.getElementById('sec-rent').style.display = type === 'rent' ? 'block' : 'none';
-        document.querySelectorAll('.m-tab').forEach((t, i) => t.classList.toggle('active', (i === 0 && type === 'tel') || (i === 1 && type === 'rent')));
+        document.getElementById('m-btn-tel').classList.toggle('active', type === 'tel');
+        document.getElementById('m-btn-rent').classList.toggle('active', type === 'rent');
     }
 
-    // [기능: 전화번호부]
+    // [3] 서브 카테고리 생성 (전화번호부)
     function initSubTabs() {
-        const cats = ["전체", ...new Set(phoneData.map(item => item.cat))];
+        const cats = ["전체", ...new Set(phoneData.map(d => d.cat))];
         const container = document.getElementById('subTabs');
-        container.innerHTML = cats.map(c => `<div class="s-tab ${c === '전체' ? 'active' : ''}" onclick="filterByCat('${c}')">${c}</div>`).join('');
+        container.innerHTML = cats.map(c => `<div class="s-tab ${c === '전체' ? 'active' : ''}" onclick="filterByCat(this, '${c}')">${c}</div>`).join('');
     }
 
-    function filterByCat(cat) {
+    function filterByCat(el, cat) {
         currentCat = cat;
-        document.querySelectorAll('.s-tab').forEach(t => t.classList.toggle('active', t.innerText === cat));
+        document.querySelectorAll('.s-tab').forEach(t => t.classList.remove('active'));
+        el.classList.add('active');
         filterPhones();
     }
 
+    // [4] 전화번호 검색 (초성 지원 및 아이콘 고정)
     function filterPhones() {
-        const query = document.getElementById('phoneSearch').value.replace(/\s/g, "");
+        const q = document.getElementById('phoneSearch').value.replace(/\s/g, "");
         const list = document.getElementById('phoneList');
         list.innerHTML = '';
 
-        phoneData.filter(item => {
-            const matchCat = currentCat === "전체" || item.cat === currentCat;
-            const target = (item.name + item.dept + item.work).replace(/\s/g, "");
-            return matchCat && Hangul.search(target, query) >= 0;
+        phoneData.filter(d => {
+            const matchCat = currentCat === '전체' || d.cat === currentCat;
+            const target = (d.name + d.dept + d.work).replace(/\s/g, "");
+            return matchCat && Hangul.search(target, q) >= 0;
         }).forEach(r => {
             const dispNum = r.tel.replace("02-2258-", "").replace("02-3147-", "");
+            const nStyle = (r.tel.includes("2258") || r.tel.includes("*1")) ? "num-area special-navy" : "num-area";
+            const cleanTel = r.tel.replace(/[^0-9]/g, "");
+            const cleanHp = r.hp.replace(/[^0-9]/g, "");
+
             list.insertAdjacentHTML('beforeend', `
                 <div class="phone-item">
                     <div class="top-line">
                         <div class="name-area">${r.name || r.dept}</div>
-                        <div class="num-area ${r.tel.includes('2258') ? 'special-navy' : ''}">${dispNum}</div>
+                        <div class="${nStyle}">${dispNum}</div>
                         <div class="icon-area">
-                            ${r.tel ? `<a href="tel:${r.tel.replace(/-/g,'')}" class="btn-icon">T</a>` : '<div style="width:32px"></div>'}
-                            ${r.hp ? `<a href="tel:${r.hp.replace(/-/g,'')}" class="btn-icon btn-m">M</a>` : '<div style="width:32px"></div>'}
+                            ${r.tel ? `<a href="tel:${cleanTel}" class="btn-icon">T</a>` : '<div style="width:32px"></div>'}
+                            ${r.hp ? `<a href="tel:${cleanHp}" class="btn-icon btn-m">M</a>` : '<div style="width:32px"></div>'}
                         </div>
                     </div>
                     <div class="work-text">${r.work}</div>
@@ -154,39 +170,43 @@
         });
     }
 
-    // [기능: 대관]
-    function setView(view) {
-        currentView = view;
-        document.getElementById('btn-card').classList.toggle('active', view === 'card');
-        document.getElementById('btn-list').classList.toggle('active', view === 'list');
+    // [5] 대관 조회 (뷰 모드 전환 지원)
+    function setView(v) {
+        currentView = v;
+        document.getElementById('btn-card').classList.toggle('active', v === 'card');
+        document.getElementById('btn-list').classList.toggle('active', v === 'list');
         renderRental();
     }
 
     function renderRental() {
-        const date = document.getElementById('rentDate').value;
+        const d = document.getElementById('rentDate').value;
         const list = document.getElementById('rentalList');
         list.innerHTML = '';
 
-        ["성의회관", "의생명산업연구원", "옴니버스 파크"].forEach(bu => {
-            const daily = rentalData.filter(d => d.date === date && d.buNm.includes(bu));
+        const buildings = ["성의회관", "의생명산업연구원", "옴니버스 파크"];
+        buildings.forEach(bu => {
             list.insertAdjacentHTML('beforeend', `<div class="building-header">🏢 ${bu}</div>`);
+            const items = rentalData.filter(ev => ev.date === d && ev.buNm.includes(bu));
             
-            if (daily.length === 0) return list.insertAdjacentHTML('beforeend', '<div class="no-data">내역 없음</div>');
+            if(items.length === 0) {
+                list.insertAdjacentHTML('beforeend', '<div class="no-data">예약 내역이 없습니다.</div>');
+                return;
+            }
 
-            if (currentView === 'list') {
-                let table = `<table class="res-table"><thead><tr><th>장소</th><th>시간</th><th>행사명</th><th class="pc-only">상태</th></tr></thead><tbody>`;
-                daily.forEach(ev => {
-                    table += `<tr><td>${ev.placeNm}</td><td>${ev.startTime}~${ev.endTime}</td><td>${ev.eventNm}</td><td class="pc-only">${ev.status==='Y'?'확정':'대기'}</td></tr>`;
+            if(currentView === 'list') {
+                let table = `<table class="res-table"><thead><tr><th style="width:30%">장소</th><th style="width:30%">시간</th><th>행사명</th><th class="pc-only" style="width:15%">상태</th></tr></thead><tbody>`;
+                items.forEach(i => {
+                    table += `<tr><td>${i.placeNm}</td><td>${i.startTime}~${i.endTime}</td><td>${i.eventNm}</td><td class="pc-only">${i.status==='Y'?'확정':'대기'}</td></tr>`;
                 });
-                list.insertAdjacentHTML('beforeend', table + `</tbody></table>`);
+                list.insertAdjacentHTML('beforeend', table + '</tbody></table>');
             } else {
-                daily.forEach(ev => {
+                items.forEach(i => {
                     list.insertAdjacentHTML('beforeend', `
                         <div class="res-card">
-                            <span class="badge ${ev.status==='Y'?'badge-y':'badge-n'}">${ev.status==='Y'?'확정':'대기'}</span>
-                            <div style="font-weight:800;">📍 ${ev.placeNm}</div>
-                            <div style="font-size:13px; color:#64748b; margin-top:4px;">⏰ ${ev.startTime} ~ ${ev.endTime}</div>
-                            <div style="margin-top:8px; font-size:14px;">${ev.eventNm}</div>
+                            <span class="badge ${i.status==='Y'?'badge-y':'badge-n'}">${i.status==='Y'?'확정':'대기'}</span>
+                            <div style="font-weight:800; font-size:15px; margin-bottom:5px;">📍 ${i.placeNm}</div>
+                            <div style="font-size:13px; color:#64748b;">⏰ ${i.startTime} ~ ${i.endTime}</div>
+                            <div style="margin-top:10px; font-size:14px; color:#334155; line-height:1.4;">${i.eventNm}</div>
                         </div>`);
                 });
             }
