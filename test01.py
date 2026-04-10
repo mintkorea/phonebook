@@ -2,206 +2,151 @@ import streamlit as st
 import pandas as pd
 import re
 
-# 1. 페이지 설정
-st.set_page_config(page_title="성의교정 주요전화", layout="wide")
+# 1. 스타일 설정 (부서명 130px / 번호 가변 / 아이콘 60px)
+st.set_page_config(page_title="성의교정 통합 지원포털", layout="centered")
 
-# --- 초성 추출 함수 ---
-def get_chosung(text):
-    CHOSUNG_LIST = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
-    result = ""
-    for char in text:
-        code = ord(char)
-        if 0xAC00 <= code <= 0xD7A3:
-            chosung_index = (code - 0xAC00) // 588
-            result += CHOSUNG_LIST[chosung_index]
-        else:
-            result += char
-    return result
-
-# 2. UI 디자인 (모바일 최적화 상단 고정형 레이아웃)
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
-    .block-container { padding: 1rem !important; background-color: #ffffff; font-family: 'Pretendard', sans-serif; }
-    header, footer { visibility: hidden; }
-    .main-title { font-size: 1.8rem; font-weight: 900; color: #1e293b; margin-bottom: 1.2rem; padding-left: 10px; border-left: 5px solid #10b981; }
+    .block-container { padding: 1rem !important; max-width: 500px !important; margin: 0 auto; font-family: 'Pretendard', sans-serif; }
     
-    .stTabs [data-baseweb="tab"] { font-size: 1.2rem !important; font-weight: 700 !important; color: #94a3b8 !important; }
-    .stTabs [aria-selected="true"] { color: #10b981 !important; font-weight: 900 !important; }
-
-    /* 리스트 아이템 전체 구조 */
-    .contact-item { 
-        padding: 15px 0; 
+    .phone-item { 
         border-bottom: 1px solid #f1f5f9; 
+        padding: 10px 0; 
         display: flex;
-        flex-direction: column; /* 세로 배열로 변경하여 업무내용 공간 확보 */
-        gap: 4px;
+        flex-direction: column; 
     }
     
-    /* 상단 라인: 이름(왼쪽) + 번호/버튼(오른쪽) */
-    .top-line {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+    .top-line { 
+        display: flex; 
+        align-items: center; 
         width: 100%;
+        gap: 2px;
     }
-
-    .name-group {
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-        flex: 1;
+    
+    /* [확정] 1구역: 부서명 영역 130px 고정 */
+    .name-area { 
+        width: 130px !important; 
+        min-width: 130px !important;
+        flex-shrink: 0;
+    }
+    .name-text { 
+        font-size: 15px; 
+        font-weight: 800; 
+        color: #0f172a; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+    }
+    
+    /* 2구역: 전화번호 영역 (중앙 가변 공간) */
+    .num-area { 
+        flex: 1; 
+        text-align: right; 
+        padding-right: 6px;
         min-width: 0;
     }
-
-    .name-text { font-size: 1.15rem; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .dept-text { font-size: 0.85rem; color: #94a3b8; font-weight: 400; white-space: nowrap; }
-
-    /* 우측 영역: 번호 + 버튼 */
-    .right-side {
-        display: flex;
-        align-items: center;
-        gap: 10px;
+    .num-text { font-size: 14px; font-weight: 700; color: #334155; white-space: nowrap; }
+    .special-navy { color: #1e3a8a !important; font-style: italic !important; font-weight: 800 !important; }
+    
+    /* 3구역: 아이콘 영역 (60px 고정 및 우측 끝 정렬) */
+    .icon-area { 
+        width: 60px !important; 
+        min-width: 60px !important;
+        display: flex; 
+        justify-content: flex-end; 
+        gap: 4px;
         flex-shrink: 0;
     }
 
-    .tel-info {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
+    /* 아이콘 디자인 (축소 사이즈 24px 유지) */
+    .btn-icon { 
+        text-decoration: none !important; background: #f8fafc; color: #475569 !important; 
+        border: 1px solid #e2e8f0; width: 24px; height: 24px; 
+        display: flex; align-items: center; justify-content: center; 
+        border-radius: 4px; font-weight: 800; font-size: 10px; flex-shrink: 0;
     }
+    .btn-m { background: #ecfdf5; color: #059669 !important; border-color: #d1fae5; }
 
-    .highlight-tel { font-size: 1.15rem; font-weight: 700; color: #334155; line-height: 1; }
-    .navy-tel { font-family: 'Times New Roman', serif; color: #000080 !important; font-weight: 900 !important; font-style: italic; }
-    .highlight-hp { font-size: 1rem; color: #059669; font-weight: 700; line-height: 1.2; }
-
-    .btn-group { 
-        display: flex; 
-        gap: 4px; 
-        width: 76px; 
-        justify-content: flex-end;
-    }
-    .c-btn { 
-        display: inline-flex; 
-        align-items: center; 
-        justify-content: center; 
-        width: 34px; 
-        height: 34px; 
-        border-radius: 8px; 
-        text-decoration: none !important; 
-        font-size: 0.85rem; 
-        font-weight: 800; 
-    }
-    .btn-tel { background-color: #f1f5f9; color: #475569 !important; border: 1px solid #e2e8f0; }
-    .btn-hp { background-color: #ecfdf5; color: #059669 !important; border: 1px solid #d1fae5; }
-
-    /* 하단 라인: 업무내용 (너비를 100% 사용하여 개행 방지 및 가독성 확보) */
-    .work-desc { 
-        font-size: 0.85rem; 
-        color: #10b981; 
-        font-weight: 600; 
-        line-height: 1.4; 
-        padding-right: 10px;
-        word-break: keep-all; 
-    }
+    /* 비고 영역 */
+    .bottom-line { margin-top: 3px; width: 100%; }
+    .work-text { font-size: 12px; color: #10b981; font-weight: 600; }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-st.markdown('<div class="main-title">성의교정 주요전화</div>', unsafe_allow_html=True)
+# 2. 데이터 처리 함수
+def get_chosung(text):
+    if not text: return ""
+    CHOSUNG_LIST = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
+    res = ""
+    for char in str(text):
+        code = ord(char)
+        if 0xAC00 <= code <= 0xD7A3:
+            idx = (code - 0xAC00) // 588
+            res += CHOSUNG_LIST[idx]
+        else: res += char
+    return res
 
-# 3. 데이터 로드
-@st.cache_data(ttl=300)
-def get_live_data():
-    URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
+def parse_sort_key(val):
+    nums = re.findall(r'\d+', str(val))
+    return [int(n) for n in nums] if nums else [999]
+
+@st.cache_data(ttl=600)
+def load_data():
+    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
     try:
-        df = pd.read_csv(URL).astype(str)
-        df = df.replace('nan', '').apply(lambda x: x.str.strip())
-        cols = ['c_cat', 'c_dept', 'c_name', 'c_tel', 'c_hp', 'c_work']
-        df.columns = [cols[i] for i in range(min(len(df.columns), len(cols)))]
-        df['sort_order'] = df['c_cat'].apply(lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
-        df['c_cat_display'] = df['c_cat'].apply(lambda x: re.sub(r'\d+', '', x).strip())
-        df['chosung_key'] = (df['c_name'] + " " + df['c_dept'] + " " + df['c_work']).apply(get_chosung)
-        return df.sort_values(by=['sort_order', 'c_dept', 'c_name'], ascending=[True, True, True])
-    except:
-        return pd.DataFrame()
+        df = pd.read_csv(url).fillna('').astype(str).apply(lambda x: x.str.strip())
+        df.columns = ['cat', 'dept', 'name', 'tel', 'hp', 'work']
+        df['sort_key'] = df['cat'].apply(parse_sort_key)
+        df = df.sort_values(by='sort_key').drop(columns=['sort_key']).reset_index(drop=True)
+        df['search_text'] = df['name'] + " " + df['dept'] + " " + df['work']
+        df['cho'] = df['search_text'].apply(get_chosung)
+        return df
+    except: return pd.DataFrame()
 
-df = get_live_data()
+# 3. 메인 로직
+df = load_data()
+q = st.text_input("🔍 검색 (성함, 부서, 업무, 초성)", placeholder="예: 보안, 시설, ㅂㅇ")
 
-# 4. 검색 로직
-q = st.text_input("", placeholder="🔍 성함, 부서, 업무 초성 검색", key="global_search", label_visibility="collapsed")
-if q:
-    is_chosung = all('ㄱ' <= char <= 'ㅎ' or char == " " for char in q)
-    filtered_base = df[df['chosung_key'].str.contains(q, case=False)] if is_chosung else df[df.apply(lambda r: r.str.contains(q, case=False).any(), axis=1)]
-else:
-    filtered_base = df
+tabs = st.tabs(["전체", "보안", "시설", "미화", "총무", "지원", "기타"])
+categories = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
 
-# 5. 유틸리티 함수
-def get_dial_number(raw_num):
-    clean_num = re.sub(r'[^0-9*]', '', str(raw_num))
-    if not clean_num: return ""
-    if clean_num.startswith('*1'): return "022258" + clean_num.replace('*1', '')
-    if len(clean_num) >= 7: return "02" + clean_num
-    return "023147" + clean_num
+for i, cat in enumerate(categories):
+    with tabs[i]:
+        fdf = df if cat == "전체" else df[df['cat'].str.contains(cat) | df['dept'].str.contains(cat)]
+        if q:
+            is_cho = all('ㄱ' <= c <= 'ㅎ' or c == " " for c in q)
+            fdf = fdf[fdf['cho'].str.contains(q.replace(" ", ""))] if is_cho else fdf[fdf['search_text'].str.contains(q)]
 
-# 6. UI 렌더링 함수
-def render_ui(target_df):
-    if target_df.empty:
-        st.caption("결과가 없습니다. 🌱")
-        return
-        
-    for _, row in target_df.iterrows():
-        nm, dp, wk = row['c_name'], row['c_dept'], row['c_work']
-        raw_tel, raw_hp = str(row['c_tel']), str(row['c_hp'])
-        
-        display_name = nm if nm else dp
-        display_dept = dp if nm else ""
-        display_tel = raw_tel.replace("02-3147-", "").replace("02-3147", "") if "총무" in dp else raw_tel
-        tel_class = "highlight-tel navy-tel" if display_tel.startswith('*1') else "highlight-tel"
+        for _, r in fdf.iterrows():
+            d_name = r['name'] if r['name'] else r['dept']
+            d_work = "" if r['work'] == r['dept'] or r['work'] == r['name'] else r['work']
+            
+            n_html = ""
+            t_icon = ""
+            if r['tel'] and r['tel'].lower() != 'nan':
+                tel_val = r['tel']
+                disp_num = tel_val.replace('02-3147-', '').replace('02-2258-', '')
+                n_style = "num-text special-navy" if ("*1" in tel_val or "2258" in tel_val) else "num-text"
+                clean_tel = re.sub(r'[^0-9*]', '', tel_val)
+                t_url = f"tel:022258{clean_tel.replace('*1','')}" if "*1" in clean_tel else (f"tel:023147{clean_tel}" if len(clean_tel)==4 else f"tel:{clean_tel}")
+                n_html = '<span class="' + n_style + '">' + disp_num + '</span>'
+                t_icon = '<a href="' + t_url + '" class="btn-icon">T</a>'
+            
+            m_icon = ""
+            if r['hp'] and r['hp'].lower() != 'nan':
+                hp_num = re.sub(r'[^0-9]', '', r['hp'])
+                m_icon = '<a href="tel:' + hp_num + '" class="btn-icon btn-m">M</a>'
 
-        # --- [핵심 수정] 보안팀 번호 숨김 로직 ---
-        is_security = "보안" in dp
-        
-        # 전화번호 및 버튼 HTML 빌드
-        tel_inner = ""
-        if raw_tel: 
-            tel_inner += f'<span class="{tel_class}">{display_tel}</span>'
-        
-        # 보안팀이면 번호 텍스트는 추가하지 않음 (기능은 M 버튼에서 처리)
-        if raw_hp and not is_security: 
-            tel_inner += f'<span class="highlight-hp">{raw_hp}</span>'
-        
-        dial_tel = get_dial_number(raw_tel)
-        t_btn = f'<a href="tel:{dial_tel}" class="c-btn btn-tel">T</a>' if dial_tel else ''
-        
-        # M 버튼은 보안팀이라도 번호가 있으면 생성 (기능 유지)
-        m_btn = f'<a href="tel:{re.sub(r"[^0-9]", "", raw_hp)}" class="c-btn btn-hp">M</a>' if raw_hp else ''
-
-        # 전체 아이템 구성
-        final_html = (
-            f'<div class="contact-item">'
-            f'    <div class="top-line">'
-            f'        <div class="name-group">'
-            f'            <span class="name-text">{display_name}</span>'
-            f'            <span class="dept-text">{display_dept}</span>'
-            f'        </div>'
-            f'        <div class="right-side">'
-            f'            <div class="tel-info">{tel_inner}</div>'
-            f'            <div class="btn-group">{t_btn}{m_btn}</div>'
-            f'        </div>'
-            f'    </div>'
-            f'    {f"<div class=\"work-desc\">{wk}</div>" if wk and wk.strip() else ""}'
-            f'</div>'
-        )
-        st.markdown(final_html, unsafe_allow_html=True)
-
-# 7. 탭 실행
-tab_names = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
-tabs = st.tabs(tab_names)
-
-for i, tab in enumerate(tabs):
-    with tab:
-        category = tab_names[i]
-        target = filtered_base if category == "전체" else \
-                 filtered_base[filtered_base['c_cat_display'].str.contains(category, na=False) | 
-                               filtered_base['c_dept'].str.contains(category, na=False)]
-        render_ui(target)
+            # 확정된 3구역 분할 적용 (130px / 가변 / 60px)
+            item_html = (
+                '<div class="phone-item">'
+                '<div class="top-line">'
+                '  <div class="name-area"><div class="name-text">' + d_name + '</div></div>'
+                '  <div class="num-area">' + n_html + '</div>'
+                '  <div class="icon-area">' + t_icon + m_icon + '</div>'
+                '</div>'
+                '<div class="bottom-line"><div class="work-text">' + d_work + '</div></div>'
+                '</div>'
+            )
+            st.markdown(item_html, unsafe_allow_html=True)
