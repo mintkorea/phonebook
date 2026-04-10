@@ -1,152 +1,233 @@
 import streamlit as st
+import requests
 import pandas as pd
-import re
+from datetime import datetime, date, timedelta
+import streamlit.components.v1 as components
+from zoneinfo import ZoneInfo
 
-# 1. 스타일 설정 (부서명 130px / 번호 가변 / 아이콘 60px)
-st.set_page_config(page_title="성의교정 통합 지원포털", layout="centered")
+# 1. 페이지 설정 및 시간대 (한국 표준시 KST 강제 설정)
+KST = ZoneInfo("Asia/Seoul")
 
+def get_now_kst():
+    """현재 한국의 날짜와 시간을 반환"""
+    return datetime.now(KST)
+
+def today_kst():
+    """현재 한국 날짜 반환"""
+    return get_now_kst().date()
+
+st.set_page_config(page_title="성의교정 대관 조회(M)", page_icon="🏫", layout="centered")
+
+# 요일 코드 변환 함수
+def get_weekday_names(codes):
+    days = {"1":"월", "2":"화", "3":"수", "4":"목", "5":"금", "6":"토", "7":"일"}
+    if not codes: return ""
+    return ",".join([days.get(c.strip(), "") for c in str(codes).split(",") if c.strip() in days])
+
+# 근무조 계산 로직 (기준일: 2026-03-13)
+def get_work_shift(d):
+    anchor = date(2026, 3, 13)
+    diff = (d - anchor).days
+    shifts = [{"n": "A조", "bg": "#FF9800"}, {"n": "B조", "bg": "#E91E63"}, {"n": "C조", "bg": "#2196F3"}]
+    return shifts[diff % 3]
+
+# 이동 및 검색 로직 (세션 관리)
+if 'target_date' not in st.session_state:
+    st.session_state.target_date = today_kst()
+if 'search_performed' not in st.session_state:
+    st.session_state.search_performed = False
+
+# [수정 포인트] URL 파라미터가 있을 경우 즉시 조회 상태로 변경
+url_params = st.query_params
+if "d" in url_params:
+    try:
+        url_d = datetime.strptime(url_params["d"], "%Y-%m-%d").date()
+        if st.session_state.target_date != url_d:
+            st.session_state.target_date = url_d
+        # URL로 접속하면 무조건 조회 결과가 보이도록 강제 설정
+        st.session_state.search_performed = True
+    except:
+        pass
+
+# 2. CSS 스타일
 st.markdown("""
-    <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
-    .block-container { padding: 1rem !important; max-width: 500px !important; margin: 0 auto; font-family: 'Pretendard', sans-serif; }
+<style>
+    #top-anchor { position: absolute; top: 0; left: 0; }
+    .block-container { padding: 1rem 1.2rem !important; max-width: 500px !important; }
+    header { visibility: hidden; }
+    .main-title { font-size: 24px !important; font-weight: 800; text-align: center; color: #1E3A5F; margin-bottom: 20px !important; }
+    .stCheckbox { margin-top: -10px !important; margin-bottom: -5px !important; }
+    .sat { color: #0000FF !important; }
+    .sun { color: #FF0000 !important; }
+    .date-display-box { 
+        text-align: center; background-color: #F8FAFF; padding: 15px 10px 8px 10px; 
+        border-radius: 12px 12px 0 0; border: 1px solid #D1D9E6; border-bottom: none; line-height: 1.2 !important;
+    }
+    .res-main-title { font-size: 20px !important; font-weight: 800; color: #1E3A5F; display: block; margin-bottom: 4px; }
+    .res-sub-title { font-size: 18px !important; font-weight: 700; color: #333; }
+    .nav-link-bar {
+        display: flex !important; width: 100% !important; background: white !important; 
+        border: 1px solid #D1D9E6 !important; border-radius: 0 0 10px 10px !important; 
+        margin-bottom: 25px !important; overflow: hidden !important;
+    }
+    .nav-item {
+        flex: 1 !important; text-align: center !important; padding: 12px 0 !important;
+        text-decoration: none !important; color: #1E3A5F !important; font-weight: bold !important; 
+        border-right: 1px solid #F0F0F0 !important; font-size: 14px !important;
+    }
+    .nav-item:last-child { border-right: none !important; }
+    .building-header { font-size: 18px !important; font-weight: bold; color: #2E5077; margin-top: 15px; border-bottom: 2px solid #2E5077; padding-bottom: 5px; margin-bottom: 12px; }
+    .section-title { font-size: 15px; font-weight: bold; color: #555; margin: 10px 0 6px 0; padding-left: 5px; border-left: 4px solid #ccc; }
+    .event-card { border: 1px solid #E0E0E0; border-left: 5px solid #2E5077; padding: 12px 14px; border-radius: 5px; margin-bottom: 12px !important; background-color: #ffffff; line-height: 1.4 !important; }
+    .status-badge { display: inline-block; padding: 2px 8px; font-size: 11px; border-radius: 10px; font-weight: bold; float: right; }
+    .status-y { background-color: #FFF4E5; color: #B25E09; } .status-n { background-color: #E8F0FE; color: #1967D2; }
+    .bottom-info { font-size: 12px; color: #666; margin-top: 8px; display: flex; justify-content: space-between; border-top: 1px solid #f0f0f0; padding-top: 6px; align-items: center; }
     
-    .phone-item { 
-        border-bottom: 1px solid #f1f5f9; 
-        padding: 10px 0; 
-        display: flex;
-        flex-direction: column; 
-    }
+    .open-card { border: 2px dashed #2E5077; padding: 15px; border-radius: 10px; margin-bottom: 15px; background-color: #F8FAFF; }
+    .open-bu-title { font-weight: 800; color: #2E5077; font-size: 19px !important; margin-bottom: 10px; border-bottom: 2px solid #D1D9E6; }
+    .open-room-name { font-weight: bold; color: #333; font-size: 17px !important; margin-bottom: 3px; }
+    .open-room-time { font-size: 16px !important; color: #FF4B4B; font-weight: bold; margin-bottom: 5px; }
+    .open-room-note { font-size: 14px !important; color: #444; line-height: 1.4; background: #eee; padding: 5px 8px; border-radius: 4px; }
     
-    .top-line { 
-        display: flex; 
-        align-items: center; 
-        width: 100%;
-        gap: 2px;
+    .top-btn { position:fixed; bottom:80px; right:20px; z-index:999; }
+    .link-btn {
+        display: block; padding: 8px 0 !important; margin: 0 !important; color: #1E3A5F !important;
+        text-decoration: none; font-weight: bold; text-align: left; font-size: 14px;
+        line-height: 1.4 !important; border-bottom: 1px solid #f0f0f0;
     }
-    
-    /* [확정] 1구역: 부서명 영역 130px 고정 */
-    .name-area { 
-        width: 130px !important; 
-        min-width: 130px !important;
-        flex-shrink: 0;
-    }
-    .name-text { 
-        font-size: 15px; 
-        font-weight: 800; 
-        color: #0f172a; 
-        white-space: nowrap; 
-        overflow: hidden; 
-        text-overflow: ellipsis; 
-    }
-    
-    /* 2구역: 전화번호 영역 (중앙 가변 공간) */
-    .num-area { 
-        flex: 1; 
-        text-align: right; 
-        padding-right: 6px;
-        min-width: 0;
-    }
-    .num-text { font-size: 14px; font-weight: 700; color: #334155; white-space: nowrap; }
-    .special-navy { color: #1e3a8a !important; font-style: italic !important; font-weight: 800 !important; }
-    
-    /* 3구역: 아이콘 영역 (60px 고정 및 우측 끝 정렬) */
-    .icon-area { 
-        width: 60px !important; 
-        min-width: 60px !important;
-        display: flex; 
-        justify-content: flex-end; 
-        gap: 4px;
-        flex-shrink: 0;
-    }
-
-    /* 아이콘 디자인 (축소 사이즈 24px 유지) */
-    .btn-icon { 
-        text-decoration: none !important; background: #f8fafc; color: #475569 !important; 
-        border: 1px solid #e2e8f0; width: 24px; height: 24px; 
-        display: flex; align-items: center; justify-content: center; 
-        border-radius: 4px; font-weight: 800; font-size: 10px; flex-shrink: 0;
-    }
-    .btn-m { background: #ecfdf5; color: #059669 !important; border-color: #d1fae5; }
-
-    /* 비고 영역 */
-    .bottom-line { margin-top: 3px; width: 100%; }
-    .work-text { font-size: 12px; color: #10b981; font-weight: 600; }
-    </style>
+    .spacer { height: 10px; }
+</style>
 """, unsafe_allow_html=True)
 
-# 2. 데이터 처리 함수
-def get_chosung(text):
-    if not text: return ""
-    CHOSUNG_LIST = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
-    res = ""
-    for char in str(text):
-        code = ord(char)
-        if 0xAC00 <= code <= 0xD7A3:
-            idx = (code - 0xAC00) // 588
-            res += CHOSUNG_LIST[idx]
-        else: res += char
-    return res
+st.markdown('<div id="top-anchor"></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🏫 성의교정 시설 대관 현황</div>', unsafe_allow_html=True)
 
-def parse_sort_key(val):
-    nums = re.findall(r'\d+', str(val))
-    return [int(n) for n in nums] if nums else [999]
+# 3. 입력부
+with st.form("search_form"):
+    selected_date = st.date_input("날짜 선택", value=st.session_state.target_date)
+    st.markdown('**🏢 건물 선택**')
+    ALL_BU = ["성의회관", "의생명산업연구원", "옴니버스 파크", "옴니버스 파크 의과대학", "옴니버스 파크 간호대학", "대학본관", "서울성모별관"]
+    
+    cols = st.columns(2)
+    selected_bu_list = []
+    for i, bu in enumerate(ALL_BU):
+        with cols[i % 2]:
+            if st.checkbox(bu, value=(bu in ["성의회관", "의생명산업연구원"]), key=f"f_{bu}"):
+                selected_bu_list.append(bu)
+                
+    st.markdown('**🗓️ 대관 유형**')
+    c1, c2 = st.columns(2)
+    show_t = c1.checkbox("당일 대관", value=True, key="chk_t")
+    show_p = c2.checkbox("기간 대관", value=True, key="chk_p")
+    
+    if st.form_submit_button("🔍 대관 현황 조회", use_container_width=True):
+        st.session_state.target_date = selected_date
+        st.session_state.search_performed = True
+        st.query_params["d"] = selected_date.strftime("%Y-%m-%d")
+        st.rerun()
 
-@st.cache_data(ttl=600)
-def load_data():
-    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQpOX8Ll6no4uXd5jnK0umTY3U_eKZXcDK2z_f2EsxSQDuOqk4YGzNkULJn_WgjTFBUseCbl6smBh0Z/pub?gid=1424582869&single=true&output=csv"
+# 4. 데이터 로딩 함수
+@st.cache_data(ttl=300)
+def get_data(d):
+    url = "https://songeui.catholic.ac.kr/ko/service/application-for-rental_calendar.do"
+    params = {"mode": "getReservedData", "start": d.strftime('%Y-%m-%d'), "end": d.strftime('%Y-%m-%d')}
     try:
-        df = pd.read_csv(url).fillna('').astype(str).apply(lambda x: x.str.strip())
-        df.columns = ['cat', 'dept', 'name', 'tel', 'hp', 'work']
-        df['sort_key'] = df['cat'].apply(parse_sort_key)
-        df = df.sort_values(by='sort_key').drop(columns=['sort_key']).reset_index(drop=True)
-        df['search_text'] = df['name'] + " " + df['dept'] + " " + df['work']
-        df['cho'] = df['search_text'].apply(get_chosung)
-        return df
-    except: return pd.DataFrame()
+        res = requests.get(url, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        if res.status_code == 200:
+            return pd.DataFrame(res.json().get('res', []))
+        return pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
-# 3. 메인 로직
-df = load_data()
-q = st.text_input("🔍 검색 (성함, 부서, 업무, 초성)", placeholder="예: 보안, 시설, ㅂㅇ")
+# 5. 결과 출력 (조건 강화: 버튼 클릭했거나 URL 파라미터가 있는 경우)
+if st.session_state.search_performed:
+    st.markdown('<div id="result-anchor"></div>', unsafe_allow_html=True)
+    d = st.session_state.target_date
+    df_raw = get_data(d)
+    shift = get_work_shift(d)
+    
+    w_idx = d.weekday()
+    w_str = ['월','화','수','목','금','토','일'][w_idx]
+    w_class = "sat" if w_idx == 5 else ("sun" if w_idx == 6 else "")
+    is_weekend = w_idx in [5, 6]
+    
+    st.markdown(f"""
+    <div class="date-display-box">
+        <span class="res-main-title">조회 결과</span>
+        <span class="res-sub-title">{d.strftime("%Y.%m.%d")}.<span class="{w_class}">({w_str})</span>
+        <span style="background:{shift['bg']}; color:white; padding:2px 10px; border-radius:12px; font-size:14px; margin-left:5px; vertical-align:middle;">근무 : {shift['n']}</span></span>
+    </div>
+    <div class="nav-link-bar">
+        <a href="./?d={(d-timedelta(1)).strftime('%Y-%m-%d')}" target="_self" class="nav-item">◀ 이전날</a>
+        <a href="./?d={today_kst().strftime('%Y-%m-%d')}" target="_self" class="nav-item">오늘</a>
+        <a href="./?d={(d+timedelta(1)).strftime('%Y-%m-%d')}" target="_self" class="nav-item">다음날 ▶</a>
+    </div>
+    """, unsafe_allow_html=True)
 
-tabs = st.tabs(["전체", "보안", "시설", "미화", "총무", "지원", "기타"])
-categories = ["전체", "보안", "시설", "미화", "총무", "지원", "기타"]
+    target_wd = str(d.weekday() + 1)
+    
+    for bu in selected_bu_list:
+        st.markdown(f'<div class="building-header">🏢 {bu}</div>', unsafe_allow_html=True)
+        has_content = False
+        
+        if not df_raw.empty:
+            bu_df = df_raw[df_raw['buNm'].str.replace(" ", "").str.contains(bu.replace(" ", ""), na=False)].copy()
+            if not bu_df.empty:
+                t_ev = bu_df[bu_df['startDt'] == bu_df['endDt']] if show_t else pd.DataFrame()
+                p_ev = bu_df[bu_df['startDt'] != bu_df['endDt']] if show_p else pd.DataFrame()
+                v_p_ev = p_ev[p_ev['allowDay'].apply(lambda x: target_wd in [day.strip() for day in str(x).split(",")])] if not p_ev.empty else pd.DataFrame()
+                
+                for ev_df, title in [(t_ev, "📌 당일 대관"), (v_p_ev, "🗓️ 기간 대관")]:
+                    if not ev_df.empty:
+                        has_content = True
+                        st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+                        for _, row in ev_df.sort_values(by='startTime').iterrows():
+                            s_cls, s_txt = ("status-y", "예약확정") if row['status'] == 'Y' else ("status-n", "신청대기")
+                            date_info = f"🗓️ {row['startDt']}~{row['endDt']} <b style='color:#2E5077;'>({get_weekday_names(row['allowDay'])})</b>" if title == "🗓️ 기간 대관" else f"🗓️ {row['startDt']}"
+                            st.markdown(f"""
+                            <div class="event-card">
+                                <span class="status-badge {s_cls}">{s_txt}</span>
+                                <div style="font-size:16px; font-weight:bold; color:#1E3A5F; margin-bottom:4px;">📍 {row['placeNm']}</div>
+                                <div style="color:#FF4B4B; font-weight:bold; font-size:15px; margin:4px 0;">⏰ {row['startTime']} ~ {row['endTime']}</div>
+                                <div style="font-size:14px; color:#333; font-weight:bold;">📄 {row['eventNm']}</div>
+                                <div class="bottom-info"><span>{date_info}</span><span style="font-weight:bold;">👤 {row['mgDeptNm']}</span></div>
+                            </div>
+                            """, unsafe_allow_html=True)
+        
+        if not has_content:
+            st.markdown('<div style="color:#999; text-align:center; padding:15px; border:1px dashed #eee; font-size:13px;">대관 내역이 없습니다.</div>', unsafe_allow_html=True)
 
-for i, cat in enumerate(categories):
-    with tabs[i]:
-        fdf = df if cat == "전체" else df[df['cat'].str.contains(cat) | df['dept'].str.contains(cat)]
-        if q:
-            is_cho = all('ㄱ' <= c <= 'ㅎ' or c == " " for c in q)
-            fdf = fdf[fdf['cho'].str.contains(q.replace(" ", ""))] if is_cho else fdf[fdf['search_text'].str.contains(q)]
+    # 6. 강의실 개방 지침
+    st.markdown("<br><div class=\"building-header\">🔓 강의실 개방 일람/지침</div>", unsafe_allow_html=True)
+    sh_list = []
+    if not is_weekend:
+        sh_list.append({"r": "421, 422, 521, 522호", "t": "주중: 오전 개방 / 오후 원칙적 폐쇄", "n": "학생 요청 시 무리한 퇴실 독촉 금지"})
+        if date(d.year, 3, 2) <= d <= date(d.year, 4, 30):
+            sh_list.append({"r": "402, 403, 404, 405, 406, 407호", "t": "08:00 ~ 20:00 (3/2~4/30)", "n": "첫 순찰 개방 / 마지막 순찰 잠금"})
+    
+    if date(d.year, 2, 7) <= d <= date(d.year, 4, 24):
+        sh_note = "평일: 직원 개방 / 야간 21:00 폐쇄만" if not is_weekend else "주말: 학생 요청 시 해당 시간만 개방"
+        sh_list.append({"r": "801호", "t": "09:00 ~ 21:00 (2/7~4/24)", "n": sh_note})
+    
+    if sh_list:
+        sh_html = "".join([f'<div style="margin-bottom:12px;"><div class="open-room-name">• {i["r"]}</div><div class="open-room-time">⏰ {i["t"]}</div><div class="open-room-note">{i["n"]}</div></div>' for i in sh_list])
+        st.markdown(f'<div class="open-card"><div class="open-bu-title">🏢 성의회관</div>{sh_html}</div>', unsafe_allow_html=True)
+    
+    bg_status = "월~금: 오전 개방 / 오후 폐쇄" if not is_weekend else "주말: 대관 확인 후 개방"
+    st.markdown(f"""<div class="open-card"><div class="open-bu-title">🏢 서울성모별관</div><div class="open-room-name">• 1201 ~ 1206호</div><div class="open-room-time">⏰ {bg_status}</div><div class="open-room-note">{"1206호(금) 10시 교육 예정" if d.isoweekday()==5 else "평일/주말 순찰 지침 준수"}</div></div>""", unsafe_allow_html=True)
 
-        for _, r in fdf.iterrows():
-            d_name = r['name'] if r['name'] else r['dept']
-            d_work = "" if r['work'] == r['dept'] or r['work'] == r['name'] else r['work']
-            
-            n_html = ""
-            t_icon = ""
-            if r['tel'] and r['tel'].lower() != 'nan':
-                tel_val = r['tel']
-                disp_num = tel_val.replace('02-3147-', '').replace('02-2258-', '')
-                n_style = "num-text special-navy" if ("*1" in tel_val or "2258" in tel_val) else "num-text"
-                clean_tel = re.sub(r'[^0-9*]', '', tel_val)
-                t_url = f"tel:022258{clean_tel.replace('*1','')}" if "*1" in clean_tel else (f"tel:023147{clean_tel}" if len(clean_tel)==4 else f"tel:{clean_tel}")
-                n_html = '<span class="' + n_style + '">' + disp_num + '</span>'
-                t_icon = '<a href="' + t_url + '" class="btn-icon">T</a>'
-            
-            m_icon = ""
-            if r['hp'] and r['hp'].lower() != 'nan':
-                hp_num = re.sub(r'[^0-9]', '', r['hp'])
-                m_icon = '<a href="tel:' + hp_num + '" class="btn-icon btn-m">M</a>'
+    components.html("""<script>setTimeout(function() {window.parent.document.getElementById('result-anchor').scrollIntoView({behavior: 'smooth', block: 'start'});}, 500);</script>""", height=0)
 
-            # 확정된 3구역 분할 적용 (130px / 가변 / 60px)
-            item_html = (
-                '<div class="phone-item">'
-                '<div class="top-line">'
-                '  <div class="name-area"><div class="name-text">' + d_name + '</div></div>'
-                '  <div class="num-area">' + n_html + '</div>'
-                '  <div class="icon-area">' + t_icon + m_icon + '</div>'
-                '</div>'
-                '<div class="bottom-line"><div class="work-text">' + d_work + '</div></div>'
-                '</div>'
-            )
-            st.markdown(item_html, unsafe_allow_html=True)
+# 7. 자주 찾는 링크
+st.markdown("<br>", unsafe_allow_html=True)
+with st.expander("🔗 업무 관련 빠른 링크", expanded=False):
+    st.markdown(f'''
+        <a href="https://songeui.catholic.ac.kr/ko/service/application-for-rental_calendar.do" target="_blank" class="link-btn">🏫 대관신청 공식 홈페이지</a>
+        <a href="https://www.onsafe.co.kr" target="_blank" class="link-btn">👮 온세이프 (직무교육)</a>
+        <a href="https://scube.s-tec.co.kr/sso/user/login/view" target="_blank" class="link-btn">🔐 S-CUBE 통합인증</a>
+        <a href="https://pms.s-tec.co.kr/mainfrm.php" target="_blank" class="link-btn">📂 개인정보관리 (PMS)</a>
+        <a href="https://todayshift.com/" target="_blank" class="link-btn">📅 오늘근무 확인</a>
+    ''', unsafe_allow_html=True)
+
+st.markdown('<div class="spacer"></div>', unsafe_allow_html=True)
+st.markdown("""<div class="top-btn"><a href="#top-anchor" style="display:block; background:#1E3A5F; color:white !important; width:45px; height:45px; line-height:45px; text-align:center; border-radius:50%; font-size:12px; font-weight:bold; text-decoration:none !important; box-shadow:2px 4px 8px rgba(0,0,0,0.3);">TOP</a></div>""", unsafe_allow_html=True)
